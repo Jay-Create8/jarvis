@@ -1,0 +1,3 @@
+{ "name": "jarvis-einrichtung", "private": true, "type": "module",
+  "scripts": { "start": "node einrichten.mjs" },
+  "dependencies": { "wrangler": "4.40.0", "qrcode-terminal": "0.12.0" } }

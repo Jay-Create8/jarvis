@@ -1,0 +1,7 @@
+node_modules/
+.einrichtung.json
+wrangler.einrichtung.toml
+einrichten/JARVIS-Zugang.txt
+einrichten/.secrets-*
+android/**/build/
+android/**/local.properties
