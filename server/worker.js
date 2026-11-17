@@ -41,6 +41,7 @@ export async function policyCheck(env, dringlichkeit = 'normal', now = new Date(
   const parts = new Intl.DateTimeFormat('de-CH', { timeZone: p.tz || 'Europe/Zurich', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now).split(':').map(Number);
   const hm = parts[0] * 60 + parts[1], toM = (t) => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
   const a = toM(p.quietFrom), b = toM(p.quietTo); const quiet = a === b ? false : a < b ? hm >= a && hm < b : hm >= a || hm < b;
+  if (p.unbegrenzt) return log.filter((t) => now - t < 864e5).length >= 30 ? 'Notbremse: 30 Anrufe in 24 h (Schutz vor Endlosschleifen)' : null;   // 5.6: user chose no limits
   if (quiet && dringlichkeit !== 'notfall') return `Ruhezeit ${p.quietFrom}–${p.quietTo}`;
   const today = log.filter((t) => now - t < 864e5).length; if (today >= (p.maxCalls ?? 3)) return `Tageslimit erreicht (${today}/${p.maxCalls})`;
   const est = 1.15 + (log.length + 1) * 2 * 0.18; if (est > (p.budget ?? 10)) return `Monatsbudget ${p.budget} USD würde überschritten (geschätzt ${est.toFixed(2)} USD)`;
@@ -79,8 +80,14 @@ export async function thirdCallCheck(env, nummer, now = new Date()) {
   if (!länder.some((c) => nummer.startsWith('+' + c))) return 'Land nicht freigegeben (erlaubt: +' + länder.join(', +') + ')';
   const [h, m] = new Intl.DateTimeFormat('de-CH', { timeZone: p.tz || 'Europe/Zurich', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now).split(':').map(Number);
   const hm = h * 60 + m, toM = (t) => { const [a, b] = String(t).split(':').map(Number); return a * 60 + (b || 0); };
-  if (hm < toM(p.dritteVon || '08:00') || hm >= toM(p.dritteBis || '20:00')) return `Anrufe an Dritte nur ${p.dritteVon || '08:00'}–${p.dritteBis || '20:00'}`;
+  const [von, bis] = p.unbegrenzt ? ['07:00', '22:00'] : [p.dritteVon || '08:00', p.dritteBis || '20:00'];   // other people are never called at night
+  if (hm < toM(von) || hm >= toM(bis)) return `Anrufe an Dritte nur ${von}–${bis}`;
   const log = (await kvGet(env, 'thirdlog', [])).filter((x) => now - x.t < 864e5);
+  if (p.unbegrenzt) {   // 5.6: no user limits, only brakes against loops/harassment
+    if (log.length >= 50) return 'Notbremse: 50 Anrufe an Dritte in 24 h (Schutz vor Endlosschleifen)';
+    if (log.filter((x) => x.n === nummer).length >= 6) return 'Notbremse: diese Nummer heute schon 6× angerufen';
+    return null;
+  }
   if (log.length >= (p.maxDritte ?? 5)) return `Tageslimit für Anrufe an Dritte erreicht (${log.length}/${p.maxDritte ?? 5})`;
   if (log.filter((x) => x.n === nummer).length >= 2) return 'Diese Nummer wurde heute schon zweimal angerufen';
   const all = (await kvGet(env, 'calllog', [])).filter((t) => now - t < 30 * 864e5).length + (await kvGet(env, 'thirdlog', [])).filter((x) => now - x.t < 30 * 864e5).length;

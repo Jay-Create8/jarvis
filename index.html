@@ -274,6 +274,13 @@ body.immersive #chatToggle{display:grid}
 <!-- Settings -->
 <div class="sheet" id="settings"><div class="card">
   <h2>SYSTEMKONFIGURATION</h2>
+  <div id="quickStart" style="border:1px solid var(--cyan);border-radius:14px;padding:14px;margin:10px 0 18px;background:rgba(var(--acc-rgb),.07)">
+    <div style="font:700 13px Orbitron,sans-serif;letter-spacing:.14em;color:var(--cyan)">SCHNELLSTART · 2 SCHRITTE</div>
+    <p class="hint" style="margin:8px 0">1. Anthropic-Key unten einfügen – <b>der einzige Schlüssel, den du brauchst</b>. 2. Knopf drücken und bei jeder Abfrage „Zulassen“ tippen.</p>
+    <button class="btn" id="pasteKey" style="margin-right:6px">📋 KEY EINFÜGEN</button>
+    <button class="btn primary" id="unlockAll">🚀 ALLES FREISCHALTEN</button>
+    <div id="quickRes" class="hint" style="margin-top:10px"></div>
+  </div>
   <div class="field"><label>Anthropic API-Key</label><input id="cfgKey" type="password" placeholder="sk-ant-…" autocomplete="off"></div>
   <div class="toggle"><div>API-Key mit PIN schützen<small>Verschlüsselt (AES-GCM). Beim Start fragt JARVIS nach der PIN; der Key liegt dann nur im Arbeitsspeicher.</small></div><input type="checkbox" id="cfgUsePin"></div>
   <div class="field"><label>PIN (mind. 6 Zeichen, nur nötig beim Setzen/Ändern)</label><input id="cfgPin" type="password" autocomplete="new-password"></div>
@@ -319,6 +326,7 @@ body.immersive #chatToggle{display:grid}
   <p class="hint">Einrichtung und Kosten: siehe <b>server/ANLEITUNG-SERVER.md</b>. Ohne Server nutzt JARVIS Telegram-Anrufe bzw. Push.</p>
   <div class="field"><label>Telegram-Benutzername für Anrufe</label><input id="cfgTg" placeholder="@deinname" autocomplete="off"></div>
   <div class="toggle"><div>Anrufe erlauben<small>JARVIS darf dich bei wichtigen Problemen per Telegram anrufen</small></div><input type="checkbox" id="cfgCall"></div>
+  <div class="toggle"><div>Keine Limits<small>Keine Ruhezeiten, kein Tageslimit, kein Kostenlimit für Anrufe und KI. Es bleibt nur eine Notbremse gegen Endlosschleifen (30 Anrufe bei dir / 50 bei anderen in 24 h). Anrufe bei anderen Leuten nur 07–22 Uhr. Setz bei Anthropic und Twilio ein Ausgabenlimit.</small></div><input type="checkbox" data-k="unbegrenzt"></div>
   <div class="field"><label>Ruhezeiten (keine Anrufe, ausser Notfall)</label><div style="display:flex;gap:8px"><input id="cQuietFrom" type="time"><input id="cQuietTo" type="time"></div></div>
   <div class="toggle"><div>JARVIS darf andere anrufen<small>Z.B. Restaurant, Coiffeur, Praxis. Jeder Anruf nur nach deiner Freigabe. JARVIS sagt sofort, dass er eine KI ist. Nur 08–20 Uhr, keine Notruf-/Mehrwert-/Auslandsnummern (CH, DE, AT, LI erlaubt), max. 5 Minuten. Braucht JARVIS-Server + Twilio.</small></div><input type="checkbox" data-k="allowThird"></div>
   <div class="field"><label>Max. Anrufe an Dritte pro Tag</label><input type="number" min="0" max="20" data-k="maxThird"></div>
@@ -418,7 +426,7 @@ const cfg = Object.assign({
   speak:true, wake:false, awake:false, fx:true,
   ntfy:'jarvis-' + Math.random().toString(36).slice(2,10), tg:'', allowCall:false, rules:'', srv:'', srvTok:'', agentTok:'',
   pHumor:2, pSark:1, pForm:'sie', pTalk:'kurz', apiBudget:20,
-  fastMode:true, freiheit:'mitdenken', rueckruf:true, allowThird:false, maxThird:5, agentRemote:false, ctxPrefetch:true, briefMorning:'', briefEvening:'', theme:'holo', handCtl:false, elKey:'', elVoice:'', dgKey:'', keyEnc:null, quietFrom:'22:00', quietTo:'07:00', maxCalls:3, budget:10
+  fastMode:true, unbegrenzt:false, freiheit:'mitdenken', rueckruf:true, allowThird:false, maxThird:5, agentRemote:false, ctxPrefetch:true, briefMorning:'', briefEvening:'', theme:'holo', handCtl:false, elKey:'', elVoice:'', dgKey:'', keyEnc:null, quietFrom:'22:00', quietTo:'07:00', maxCalls:3, budget:10
 }, store.get('cfg', {}));
 store.set('cfg', cfg);
 let calendarEv = store.get('calendar', []); // [{id,titel,start,dauer_min,ort,notiz}]
@@ -1328,7 +1336,7 @@ async function srv(path, method = 'GET', body){
   const r = await fetch(cfg.srv + path, {method, headers:{authorization:'Bearer ' + cfg.srvTok, 'content-type':'application/json'}, body: body ? JSON.stringify(body) : undefined});
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.fehler || 'HTTP ' + r.status); return j;
 }
-async function syncWatchersToServer(){ if (cfg.srv && cfg.srvTok) try{ await srv('/api/watchers', 'PUT', {briefing:{morgen:cfg.briefMorning, abend:cfg.briefEvening, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, anrede:cfg.name, ort:ctxSnap?.pos || null, termine:calendarEv.filter(e => new Date(e.start) > Date.now() - 864e5 && new Date(e.start) < Date.now() + 8 * 864e5).map(e => ({titel:e.titel, start:e.start}))}, watchers: watchers.map(w => ({id:w.id, regel:w.regel, intervall_min:w.intervall_min, stufe:w.stufe})), policy:{rückruf:!!(cfg.rueckruf && cfg.allowCall), dritteErlaubt:!!cfg.allowThird, maxDritte:+cfg.maxThird || 5, dritteVon:'08:00', dritteBis:'20:00', quietFrom:cfg.quietFrom, quietTo:cfg.quietTo, maxCalls:cfg.maxCalls, budget:cfg.budget, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, persona:{humor:cfg.pHumor, sarkasmus:cfg.pSark, anrede:cfg.pForm, name:cfg.name}}}); }catch(e){ console.warn('Wächter-Sync', e.message); } }
+async function syncWatchersToServer(){ if (cfg.srv && cfg.srvTok) try{ await srv('/api/watchers', 'PUT', {briefing:{morgen:cfg.briefMorning, abend:cfg.briefEvening, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, anrede:cfg.name, ort:ctxSnap?.pos || null, termine:calendarEv.filter(e => new Date(e.start) > Date.now() - 864e5 && new Date(e.start) < Date.now() + 8 * 864e5).map(e => ({titel:e.titel, start:e.start}))}, watchers: watchers.map(w => ({id:w.id, regel:w.regel, intervall_min:w.intervall_min, stufe:w.stufe})), policy:{unbegrenzt:!!cfg.unbegrenzt, rückruf:!!(cfg.rueckruf && cfg.allowCall), dritteErlaubt:!!cfg.allowThird, maxDritte:+cfg.maxThird || 5, dritteVon:'08:00', dritteBis:'20:00', quietFrom:cfg.quietFrom, quietTo:cfg.quietTo, maxCalls:cfg.maxCalls, budget:cfg.budget, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, persona:{humor:cfg.pHumor, sarkasmus:cfg.pSark, anrede:cfg.pForm, name:cfg.name}}}); }catch(e){ console.warn('Wächter-Sync', e.message); } }
 async function pollInbox(){
   if (!cfg.srv || !cfg.srvTok || busy) return;
   try{
@@ -1426,6 +1434,7 @@ function callPolicy(dring){
   const today = callLog.filter(t => Date.now() - t < 864e5).length;
   const month = callLog.filter(t => Date.now() - t < 30 * 864e5).length;
   const estCost = month * 2 * 0.18 + 1.15;              // ≈ 2 min per call to a Swiss mobile + number
+  if (cfg.unbegrenzt) return today >= 30 ? 'Notbremse: 30 Anrufe in 24 h (Schutz vor Endlosschleifen)' : null;   // 5.6: no limits, only a loop brake
   if (dring !== 'notfall' && quiet) return `Ruhezeit (${cfg.quietFrom}–${cfg.quietTo})`;
   if (today >= (cfg.maxCalls ?? 3)) return `Tageslimit erreicht (${today}/${cfg.maxCalls})`;
   if (estCost + 0.36 > (cfg.budget ?? 10)) return `Monatsbudget (${cfg.budget} USD) wäre überschritten (geschätzt ${estCost.toFixed(2)} USD)`;
@@ -1775,7 +1784,7 @@ function trackUsage(model, u){
   const usd = ((u.input_tokens || 0) * P.i + (u.output_tokens || 0) * P.o + (u.cache_read_input_tokens || 0) * P.cr + (u.cache_creation_input_tokens || 0) * P.cw) / 1e6 + (u.server_tool_use?.web_search_requests || 0) * 0.01;
   costLog[monthKey()] = monthCost() + usd; store.set('costLog', costLog); return usd;
 }
-function budgetBlocked(){ return monthCost() >= (cfg.apiBudget || 20); }
+function budgetBlocked(){ return !cfg.unbegrenzt && monthCost() >= (cfg.apiBudget || 20); }   // 5.6: no limit when „Keine Limits“ is on (Anthropic console limit still applies)
 
 /* =========================================================
    CLAUDE BRAIN
@@ -2569,6 +2578,33 @@ function selfTestReport(res, meta){
   addMsg('ai', md(`**Selbsttest abgeschlossen** (${res.filter(r => verdict(r)[0] === 'OK').length}/${res.length} OK). Den Bericht mit Screenshots und Ablauf-Protokoll kannst du herunterladen und mir schicken.`), a);
 }
 $('#runSelfTest').onclick = () => selfTest();
+/* 5.6: one button – all permissions + maximum freedom */
+$('#pasteKey').onclick = async () => {
+  try{ const t = (await navigator.clipboard.readText()).trim(); if (/^sk-ant-[\w-]{20,}$/.test(t)){ $('#cfgKey').value = t; toast('🔑 Key eingefügt – jetzt „ALLES FREISCHALTEN“.'); } else toast('In der Zwischenablage ist kein Anthropic-Key (beginnt mit sk-ant-). Erst auf console.anthropic.com kopieren.'); }
+  catch{ toast('Einfügen nicht erlaubt – halte im Feld gedrückt und wähle „Einfügen“.'); }
+};
+$('#unlockAll').onclick = async () => {
+  const out = $('#quickRes'), res = [];
+  const show = () => { out.innerHTML = res.map(([n, r]) => `${r === true ? '✅' : r === null ? '⏳' : '⚠️'} <b>${esc(n)}</b>${r === true || r === null ? '' : ' – ' + esc(r)}`).join('<br>'); };
+  const de = (m) => /denied|NotAllowed|permission/i.test(m) ? 'abgelehnt' : /NotFound|no device|Requested device/i.test(m) ? 'kein Gerät gefunden' : /NotReadable|in use/i.test(m) ? 'gerade von einer anderen App belegt' : m;
+  const step = async (name, fn) => { res.push([name, null]); show(); let r; try{ r = await fn(); }catch(e){ r = de(String(e.message || e).slice(0, 80)); } res[res.length - 1][1] = r; show(); return r === true; };
+  readSettings();   // takes the key from the field
+  await step('Benachrichtigungen', async () => !('Notification' in window) ? 'vom Browser nicht unterstützt' : (await Notification.requestPermission()) === 'granted' || 'abgelehnt');
+  const media = await step('Mikrofon + Kamera', async () => { try{ const st = await navigator.mediaDevices.getUserMedia({audio:true, video:true}); st.getTracks().forEach(t => t.stop()); return true; }
+    catch{ const st = await navigator.mediaDevices.getUserMedia({audio:true}); st.getTracks().forEach(t => t.stop()); return 'nur Mikrofon (Kamera abgelehnt)'; } });
+  await step('Standort', () => new Promise(r => navigator.geolocation ? navigator.geolocation.getCurrentPosition(() => r(true), e => r(e.code === 1 ? 'abgelehnt' : 'nicht verfügbar'), {timeout:15000, maximumAge:600000}) : r('nicht verfügbar')));
+  await step('Daten dauerhaft speichern', async () => (await navigator.storage?.persist?.()) ? true : 'entscheidet der Browser später automatisch');
+  await step('Bildschirm wach halten', async () => { if (!('wakeLock' in navigator)) return 'nicht unterstützt'; try{ const l = await navigator.wakeLock.request('screen'); await l.release(); return true; }catch{ return 'klappt, sobald JARVIS im Vordergrund läuft (keine Abfrage nötig)'; } });
+  Object.assign(cfg, {freiheit:'frei', unbegrenzt:true, allowCall:true, allowThird:true, rueckruf:true, fastMode:true, ctxPrefetch:true, speak:true, quietFrom:'00:00', quietTo:'00:00',
+    wake:media || cfg.wake, agentRemote:!!(cfg.srv && cfg.srvTok) || cfg.agentRemote});
+  store.set('cfg', cfg); fillSettings(); syncWatchersToServer(); applyWakeLock(); afterIdle();
+  res.push(['Maximale Freiheit: Freie Hand, keine Limits, Anrufe an dich und andere erlaubt, „Hey Jarvis“ an', true]);
+  if (!cfg.key && !cfg.keyEnc) res.push(['Anthropic-Key fehlt – ohne ihn kann JARVIS nicht denken', 'console.anthropic.com → API Keys → kopieren → „KEY EINFÜGEN“']);
+  if (!cfg.srv) res.push(['Telefon & Laptop-Fernsteuerung', 'brauchen zusätzlich den JARVIS-Server (Einrichtungs-Assistent)']);
+  show();
+  if (res.some(([, r]) => r === 'abgelehnt')) out.innerHTML += '<br><span style="color:var(--amber)">Abgelehnt? Chrome: Schloss-Symbol links neben der Adresse → Berechtigungen → Zulassen, dann nochmal drücken.</span>';
+  logDecision({kategorie:'einstellungen', was:'Alles freigeschaltet: Freie Hand, keine Limits', wer:'du', ok:true});
+};
 for (const id of ['kFiles', 'kFolder']) $('#' + id).onchange = async (e) => { const n = await kImport([...e.target.files]); toast(`📚 ${n} Dateien eingelesen – ${kIndex?.N || 0} Abschnitte durchsuchbar.`); e.target.value = ''; };
 $('#kClear').onclick = async () => { if (!confirm('Wissensordner auf diesem Gerät leeren?')) return; const root = await navigator.storage.getDirectory(); await root.removeEntry('wissen', {recursive:true}).catch(() => {}); await kBuild(); toast('Wissensordner geleert.'); };
 $('#testSrv').onclick = async () => { readSettings(); try{ const r = await srv('/api/status'); toast(`Server OK · Telefon: ${r.twilio ? 'eingerichtet' : 'nicht eingerichtet'} · Wächter: ${r.wächter} · letzter Cron: ${r.heartbeat ? new Date(r.heartbeat.ts).toLocaleString('de-CH') : 'noch nie'}`); syncWatchersToServer(); }catch(e){ toast('Server: ' + e.message); } };

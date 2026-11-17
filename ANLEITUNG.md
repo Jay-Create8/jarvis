@@ -1,4 +1,15 @@
-# J.A.R.V.I.S. 5.5 🤖
+# J.A.R.V.I.S. 5.6 🤖
+
+> **Neu in 5.6: Ein Knopf für alles.** Einstellungen → ganz oben **SCHNELLSTART**:
+> 1. Anthropic-Key auf console.anthropic.com kopieren → **📋 KEY EINFÜGEN** (der einzige Schlüssel, den du brauchst).
+> 2. **🚀 ALLES FREISCHALTEN** → bei jeder Abfrage „Zulassen“ tippen. Fragt Benachrichtigungen, Mikrofon + Kamera, Standort,
+>    dauerhaften Speicher ab und stellt maximale Freiheit ein: Freie Hand, **Keine Limits** (keine Ruhezeiten, kein Tages- oder
+>    Kostenlimit), Anrufe an dich und andere erlaubt, „Hey Jarvis“ an. Alles einzeln wieder abschaltbar.
+> Bleibt aus Sicherheitsgründen: Notbremse gegen Endlosschleifen (30 Anrufe bei dir / 50 bei anderen in 24 h, dieselbe Nummer max. 6×),
+> Anrufe bei anderen nur 07–22 Uhr, keine Notruf-/Mehrwertnummern, KI gibt sich am Telefon zu erkennen, Zahlungen und Löschen fragen.
+> Live: **https://jay-create8.github.io/jarvis/** · Prüfbericht: **STATUS-5.6.md**
+
+## Version 5.5
 
 > **Einrichten:** siehe **EINRICHTEN.md** – der Einrichtungs-Assistent (Ordner `einrichten`) lädt Server und App in dein
 > Cloudflare-Konto und verbindet dein Handy per QR-Code. Prüfbericht: **STATUS-5.5.md**.

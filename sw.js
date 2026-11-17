@@ -1,5 +1,5 @@
 // Network-first for own files (always fresh when online), cache fallback when offline.
-const CACHE = 'jarvis-v55';
+const CACHE = 'jarvis-v56';
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html']))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {
