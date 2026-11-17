@@ -158,9 +158,9 @@ if (SERVER && SERVER_TOKEN) {
         await fetch(SERVER + '/api/agent/ergebnis', { method: 'POST', headers: H, body: JSON.stringify({ id: job.id, ok: res.ok, data: res.data }) });
       }
     } catch (e) { if (++fails === 1 || fails % 30 === 0) console.log('⚠️  Server nicht erreichbar:', e.message); }
-    setTimeout(loop, fails ? Math.min(30000, 2000 * fails) : +(process.env.JARVIS_POLL_MS || 2000));
+    setTimeout(loop, fails ? Math.min(30000, 2000 * fails) : +(process.env.JARVIS_POLL_MS || 4000));   // 4 s: Cloudflare free tier (100k reads/day)
   };
-  loop(); console.log('📡 Fernsteuerung aktiv: frage alle 2 s bei ' + SERVER + ' nach Aufträgen');
+  loop(); console.log('📡 Fernsteuerung aktiv: frage alle 4 s bei ' + SERVER + ' nach Aufträgen');
 }
 console.log(`\n🤖 JARVIS PC-Agent läuft auf ws://127.0.0.1:${PORT}\n🔑 Token für die JARVIS-Einstellungen: ${TOKEN}\n`);
 export { TOKEN, PORT };

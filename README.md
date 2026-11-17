@@ -9,5 +9,5 @@ App öffnen: `https://<dein-github-name>.github.io/jarvis/` → im Browser-Menü
 Einstellungen → Anthropic API-Key eintragen.
 
 ## Mehr
-- `ANLEITUNG.md` – alle Funktionen · `EINRICHTEN.md` – Server, Telefon, Laptop-Agent · `STATUS-5.6.md` – ehrlicher Prüfbericht
+- `ANLEITUNG.md` – alle Funktionen · `EINRICHTEN.md` – Server, Telefon, Laptop-Agent · `STATUS-5.7.md` – ehrlicher Prüfbericht
 - `server/` – optionaler JARVIS-Server (Cloudflare Worker) · `desktop-agent/` – PC-Agent · `einrichten/` – Einrichtungs-Assistent

@@ -19,6 +19,16 @@ const say = (t) => `<Say language="de-DE" voice="${VOICE}">${escX(t)}</Say>`;
 
 const client = (env) => new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, fetch: (...a) => globalThis.fetch(...a) });
 
+/* ---------- 5.7: own AI cost tracking (USD per month) – Sparmodus caps the server at policy.kiBudgetServer ---------- */
+const PRICE = { 'claude-haiku-5-5': [0.10, 0.50, 0.01, 0.125], 'claude-sonnet-5-5': [2, 10, 0.10, 2.5], 'claude-opus-5-5': [4, 20, 0.20, 5] };
+const monthKey = () => 'kosten:' + new Date().toISOString().slice(0, 7);
+async function addCost(env, model, u) {
+  if (!u) return 0; const [i, o, cr, cw] = PRICE[model] || PRICE['claude-opus-5-5'];
+  const usd = ((u.input_tokens || 0) * i + (u.output_tokens || 0) * o + (u.cache_read_input_tokens || 0) * cr + (u.cache_creation_input_tokens || 0) * cw) / 1e6 + (u.server_tool_use?.web_search_requests || 0) * 0.01;
+  await kvPut(env, monthKey(), (await kvGet(env, monthKey(), 0)) + usd); return usd;
+}
+async function overBudget(env) { const p = await kvGet(env, 'policy', {}); return p.sparmodus && p.kiBudgetServer != null && (await kvGet(env, monthKey(), 0)) >= p.kiBudgetServer; }
+
 /* ---------- helpers ---------- */
 async function kvGet(env, k, d) { const v = await env.JARVIS_KV.get(k); return v ? JSON.parse(v) : d; }
 async function kvPut(env, k, v, ttl) { await env.JARVIS_KV.put(k, JSON.stringify(v), ttl ? { expirationTtl: ttl } : undefined); }
@@ -126,6 +136,7 @@ FREIE ZEITEN IM KALENDER VON ${call.nutzer}: ${call.frei || 'unbekannt'}
 - Keine Zahlungs-, Ausweis- oder Kontodaten, nichts ausser „DARFST DU SAGEN“. Nichts erfinden.
 - Ist alles geklärt oder will das Gegenüber auflegen: gespräch_beenden mit dem genauen Ergebnis (bei Erfolg: was genau vereinbart wurde und auf welchen Namen).`;
   const r = await client(env).messages.create({ model: MODEL_CALL, max_tokens: 500, system: sys, messages: call.verlauf.map((m) => ({ role: m.role, content: m.content })), tools: THIRD_TOOLS, output_config: { effort: 'low' } });
+  await addCost(env, MODEL_CALL, r.usage);
   let text = r.content.filter((b) => b.type === 'text').map((b) => b.text).join(' ').trim();
   const end = r.content.find((b) => b.type === 'tool_use' && b.name === 'gespräch_beenden');
   if (call.verlauf.length === 1 && !/\bKI\b|künstliche intelligenz|assistent/i.test(text)) text = `Guten Tag, hier spricht JARVIS, ein KI-Assistent, keine echte Person, im Auftrag von ${call.nutzer}. ` + text;   // disclosure is enforced, not left to the model
@@ -145,6 +156,7 @@ export async function callTurn(env, call, heard) {
   const sys = `Du bist J.A.R.V.I.S., der persönliche KI-Assistent von ${per.name || 'deinem Nutzer'}: ruhig, souverän, ehrlich, mit trockenem, subtilem Humor (Stufe ${per.humor ?? 2}/3, Sarkasmus ${per.sarkasmus ?? 1}/3) – aber bei Problemen, Notfällen oder Stress ernst und sachlich. Keine Floskeln. ${per.anrede === 'du' ? 'Du duzt ihn.' : 'Du siezt ihn.'} Du telefonierst gerade mit ihm, weil: ${call.anlass}. Information: ${call.nachricht}. Sprich kurz, natürlich und auf Deutsch (1–2 Sätze, keine Aufzählungen, kein Markdown). Beantworte seine Rückfragen. Kläre die Entscheidung oder Anweisung des Nutzers. Wenn er dir etwas aufträgt, rufe aufgabe_merken auf. Wenn alles geklärt ist, verabschiede dich mit auflegen.`;
   const msgs = call.verlauf.map((m) => ({ role: m.role, content: m.content }));
   const r = await client(env).messages.create({ model: MODEL_CALL, max_tokens: 600, system: sys, messages: msgs, tools: CALL_TOOLS, output_config: { effort: 'low' } });
+  await addCost(env, MODEL_CALL, r.usage);
   const text = r.content.filter((b) => b.type === 'text').map((b) => b.text).join(' ').trim();
   const tasks = r.content.filter((b) => b.type === 'tool_use' && b.name === 'aufgabe_merken').map((b) => b.input.aufgabe);
   const hang = r.content.find((b) => b.type === 'tool_use' && b.name === 'auflegen');
@@ -155,11 +167,16 @@ export async function callTurn(env, call, heard) {
 
 /* ---------- background watchers (cron) ---------- */
 export async function runWatcher(env, w) {
-  const tools = [{ type: 'web_search_20260209', name: 'web_search', max_uses: 3 },
+  const spar = !!(await kvGet(env, 'policy', {})).sparmodus;
+  const model = spar ? 'claude-haiku-5-5' : MODEL_WATCH;   // 5.7 Sparmodus: Haiku (40× cheaper), one web search
+  const tools = [spar ? { type: 'web_search_20250305', name: 'web_search', max_uses: 1 } : { type: 'web_search_20260209', name: 'web_search', max_uses: 3 },
     { name: 'bericht', description: 'Abschlussbericht, genau einmal am Ende.', input_schema: { type: 'object', properties: { ausgelöst: { type: 'boolean' }, stand: { type: 'string' }, meldung: { type: 'string' } }, required: ['ausgelöst', 'stand'], additionalProperties: false } }];
   const msgs = [{ role: 'user', content: `Zeit: ${new Date().toISOString()}\nRegel: "${w.regel}"\nLetzter Stand: ${w.last || '—'}\nPrüfe, ob die Regel JETZT ausgelöst ist, und rufe am Ende "bericht" auf.` }];
   for (let i = 0; i < 5; i++) {
-    const r = await client(env).beta.messages.create({ model: MODEL_WATCH, max_tokens: 4000, system: 'Wächter-Modul von J.A.R.V.I.S. Sachlich, nur auslösen wenn wirklich erfüllt.', messages: msgs, tools, output_config: { effort: 'low' }, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
+    const params = { model, max_tokens: 4000, system: 'Wächter-Modul von J.A.R.V.I.S. Sachlich, nur auslösen wenn wirklich erfüllt.', messages: msgs, tools, output_config: { effort: 'low' } };
+    if (!spar) Object.assign(params, { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });   // Haiku has no server-side fallback
+    const r = await client(env).beta.messages.create(params);
+    await addCost(env, model, r.usage);
     msgs.push({ role: 'assistant', content: r.content });
     const rep = r.content.find((b) => b.type === 'tool_use' && b.name === 'bericht');
     if (rep) return rep.input;
@@ -208,10 +225,12 @@ async function briefingRun(env, now = new Date()) {
 }
 export { briefingRun };
 export async function cron(env, origin) {
-  const watchers = await kvGet(env, 'watchers', []); const out = [];
+  const watchers = await kvGet(env, 'watchers', []); const out = []; const pol = await kvGet(env, 'policy', {});
+  const minMin = pol.sparmodus ? 720 : 0;   // Sparmodus: each watcher at most every 12 h
   try { const br = await briefingRun(env); if (br) out.push({ briefing: br.art }); } catch (e) { out.push({ briefing_fehler: e.message }); }
   for (const w of watchers) {
-    if (Date.now() - (w.lastRun || 0) < (w.intervall_min || 30) * 60e3 - 30e3) continue;
+    if (Date.now() - (w.lastRun || 0) < Math.max(w.intervall_min || 30, minMin) * 60e3 - 30e3) continue;
+    if (await overBudget(env)) { w.last = 'Server-KI-Budget dieses Monats erreicht (Sparmodus) – Prüfung pausiert'; out.push({ id: w.id, budget: true }); continue; }
     w.lastRun = Date.now();
     try {
       const r = await runWatcher(env, w); w.last = r.stand;
@@ -219,7 +238,7 @@ export async function cron(env, origin) {
       else out.push({ id: w.id, ausgelöst: false });
     } catch (e) { w.last = 'Fehler: ' + e.message; out.push({ id: w.id, fehler: e.message }); }
   }
-  await kvPut(env, 'watchers', watchers);
+  if (out.length) await kvPut(env, 'watchers', watchers);   // 5.7: write only when something ran (Cloudflare free: 1000 writes/day)
   await kvPut(env, 'heartbeat', { ts: Date.now(), geprüft: out.length });
   return out;
 }
@@ -261,7 +280,7 @@ export default {
     if (url.pathname === '/api/agent/abholen' || (url.pathname === '/api/agent/ergebnis' && req.method === 'POST')) {
       if (!env.AGENT_TOKEN || req.headers.get('authorization') !== 'Bearer ' + env.AGENT_TOKEN) return json({ fehler: 'nicht autorisiert' }, 401);
       if (url.pathname === '/api/agent/abholen') {
-        await kvPut(env, 'agentSeen', Date.now());
+        const seen = await kvGet(env, 'agentSeen', 0); if (Date.now() - seen > 5 * 60e3) await kvPut(env, 'agentSeen', Date.now());   // 5.7: free tier – max ~300 writes/day
         const q = await kvGet(env, 'agentq', []); if (!q.length) return json({ aufträge: [] });
         await kvPut(env, 'agentq', []);
         return json({ aufträge: q.filter((j) => Date.now() - j.ts < 120000) });   // stale jobs (>2 min) are dropped, never executed late
@@ -273,11 +292,11 @@ export default {
     // --- JARVIS app API (bearer token) ---
     if (url.pathname.startsWith('/api/')) {
       if (!authed(req, env)) return json({ fehler: 'nicht autorisiert' }, 401);
-      if (url.pathname === '/api/status') return json({ ok: true, twilio: !!(env.TWILIO_SID && env.USER_PHONE), ntfy: !!env.NTFY_TOPIC, heartbeat: await kvGet(env, 'heartbeat', null), wächter: (await kvGet(env, 'watchers', [])).length, pc_agent_zuletzt: await kvGet(env, 'agentSeen', null) });
+      if (url.pathname === '/api/status') return json({ ok: true, twilio: !!(env.TWILIO_SID && env.USER_PHONE), ntfy: !!env.NTFY_TOPIC, heartbeat: await kvGet(env, 'heartbeat', null), wächter: (await kvGet(env, 'watchers', [])).length, pc_agent_zuletzt: await kvGet(env, 'agentSeen', null), ki_kosten_monat_usd: await kvGet(env, monthKey(), 0) });
       if (url.pathname === '/api/anruf_dritte' && req.method === 'POST') return json(await startThirdCall(env, origin, await req.json()));
       if (url.pathname === '/api/call' && req.method === 'POST') return json(await startCall(env, origin, await req.json()));
       if (url.pathname === '/api/watchers' && req.method === 'PUT') { const body = await req.json(); const list = body.watchers || []; if (body.policy) await kvPut(env, 'policy', body.policy); if (body.briefing) { const ob = await kvGet(env, 'briefing', {}); await kvPut(env, 'briefing', { ...body.briefing, gesendet: ob.gesendet || {} }); } const old = await kvGet(env, 'watchers', []); await kvPut(env, 'watchers', list.map((w) => ({ ...(old.find((o) => o.id === w.id) || {}), ...w }))); return json({ ok: true, anzahl: list.length }); }
-      if (url.pathname === '/api/inbox' && req.method === 'GET') { const box = await kvGet(env, 'inbox', []); await kvPut(env, 'inbox', []); return json({ einträge: box }); }
+      if (url.pathname === '/api/inbox' && req.method === 'GET') { const box = await kvGet(env, 'inbox', []); if (box.length) await kvPut(env, 'inbox', []); return json({ einträge: box }); }   // 5.7: no write when empty
       if (url.pathname === '/api/agent/auftrag' && req.method === 'POST') {
         const b = await req.json(); const id = crypto.randomUUID();
         const q = await kvGet(env, 'agentq', []); q.push({ id, aktion: String(b.aktion || ''), args: b.args || {}, ts: Date.now() }); await kvPut(env, 'agentq', q.slice(-20));

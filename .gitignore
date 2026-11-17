@@ -5,3 +5,5 @@ einrichten/JARVIS-Zugang.txt
 einrichten/.secrets-*
 android/**/build/
 android/**/local.properties
+*.keystore
+keystore.properties

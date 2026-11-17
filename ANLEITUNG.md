@@ -1,4 +1,16 @@
-# J.A.R.V.I.S. 5.6 🤖
+# J.A.R.V.I.S. 5.7 🤖
+
+> **Neu in 5.7: echte App + max. 2 Fr. im Monat.**
+> - **App:** Einstellungen → SCHNELLSTART → **📲 ALS APP INSTALLIEREN** (Chrome macht daraus eine echte App) – oder die
+>   **APK** laden: https://jay-create8.github.io/jarvis/JARVIS.apk (Details: `android/jarvis-app/README.md`).
+> - **💰 Sparmodus (Standard an):** Haiku statt Opus (40× günstiger), max. 2 Websuchen pro Frage, harter Deckel
+>   App 1.60 USD + Server 0.40 USD = **2 USD ≈ 1.70–1.80 Fr. im Monat**. Reicht für ca. 600–800 Antworten. Echte Telefonate
+>   über Twilio sind darin aus (kosten extra) – stattdessen Alarm-Push (ntfy) und Telegram-Anruf (CallMeBot), beide gratis.
+>   Ausschalten = volle Qualität mit Opus (dann gilt dein eigenes Budget).
+> - Server bleibt im **Cloudflare-Gratis-Kontingent** (vorher hätte der Fernmodus es ~40× überschritten).
+> Prüfbericht: **STATUS-5.7.md**
+
+## Version 5.6
 
 > **Neu in 5.6: Ein Knopf für alles.** Einstellungen → ganz oben **SCHNELLSTART**:
 > 1. Anthropic-Key auf console.anthropic.com kopieren → **📋 KEY EINFÜGEN** (der einzige Schlüssel, den du brauchst).

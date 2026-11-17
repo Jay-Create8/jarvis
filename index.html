@@ -279,6 +279,9 @@ body.immersive #chatToggle{display:grid}
     <p class="hint" style="margin:8px 0">1. Anthropic-Key unten einfügen – <b>der einzige Schlüssel, den du brauchst</b>. 2. Knopf drücken und bei jeder Abfrage „Zulassen“ tippen.</p>
     <button class="btn" id="pasteKey" style="margin-right:6px">📋 KEY EINFÜGEN</button>
     <button class="btn primary" id="unlockAll">🚀 ALLES FREISCHALTEN</button>
+    <button class="btn" id="installApp" style="margin-top:8px">📲 ALS APP INSTALLIEREN</button>
+    <a class="hint" href="JARVIS.apk" download style="display:inline-block;margin:8px 0 0 8px;color:var(--cyan2)">⬇️ oder APK laden</a>
+    <div class="toggle" style="margin-top:8px"><div>💰 Sparmodus – max. 2 Fr. im Monat<small>Haiku statt Opus (40× günstiger), wenige Websuchen, harter Deckel: App 1.60 USD + Server 0.40 USD ≈ 1.70–1.80 Fr. Telefon über Twilio ist aus (kostet extra) – stattdessen Alarm-Push und Telegram-Anruf gratis. <b id="sparNow"></b></small></div><input type="checkbox" data-k="sparmodus"></div>
     <div id="quickRes" class="hint" style="margin-top:10px"></div>
   </div>
   <div class="field"><label>Anthropic API-Key</label><input id="cfgKey" type="password" placeholder="sk-ant-…" autocomplete="off"></div>
@@ -338,7 +341,7 @@ body.immersive #chatToggle{display:grid}
   <div class="field"><label>PC-Agent Token</label><input id="cfgAgent" type="password" autocomplete="off"></div>
   <button class="btn" id="connectAgent">VERBINDEN</button> <span class="hint" id="agentState">nicht verbunden</span>
   <h3>SELBSTTEST 5.1 (ECHTE KI)</h3>
-  <p class="hint">Prüft JARVIS mit der <b>echten KI</b> auf diesem Gerät: 5 zufällig gezogene Themen aus 5 Fachgebieten (A1–A5, bewertet von einem zweiten KI-Gutachter mit Screenshots: Optik, Korrektheit, Bewegung, Bedienbarkeit, Verständlichkeit), 3 Aufgaben ohne Stichwort (B), Ernstfall (C). Jeder Test protokolliert den Ablauf Eingabe → Werkzeuge → Ergebnis. Was der Gutachter vermisst, merkt sich JARVIS als Lektion. Dauer ca. 10–20 Minuten, Kosten grob 2–6 USD (Opus) – zählt zum Monatsbudget.</p>
+  <p class="hint">Prüft JARVIS mit der <b>echten KI</b> auf diesem Gerät: 5 zufällig gezogene Themen aus 5 Fachgebieten (A1–A5, bewertet von einem zweiten KI-Gutachter mit Screenshots: Optik, Korrektheit, Bewegung, Bedienbarkeit, Verständlichkeit), 3 Aufgaben ohne Stichwort (B), Ernstfall (C). Jeder Test protokolliert den Ablauf Eingabe → Werkzeuge → Ergebnis. Was der Gutachter vermisst, merkt sich JARVIS als Lektion. Dauer ca. 10–20 Minuten, Kosten grob 2–6 USD mit Opus, im Sparmodus ca. 0.05–0.15 USD – zählt zum Monatsbudget.</p>
   <label class="hint" style="display:block"><input type="checkbox" id="stVoice" checked> V: echte Sprachkette (du sprichst einen Satz ins Mikrofon)</label>
   <label class="hint" style="display:block"><input type="checkbox" id="stResto"> R: Restaurant-Reservierung vorbereiten (braucht PC-Agent; JARVIS fragt vor dem Absenden – du lehnst ab)</label>
   <label class="hint" style="display:block"><input type="checkbox" id="stCall"> T: echter Testanruf (braucht Server + Twilio; kostet wenige Rappen; nur nach deiner Freigabe)</label>
@@ -426,7 +429,7 @@ const cfg = Object.assign({
   speak:true, wake:false, awake:false, fx:true,
   ntfy:'jarvis-' + Math.random().toString(36).slice(2,10), tg:'', allowCall:false, rules:'', srv:'', srvTok:'', agentTok:'',
   pHumor:2, pSark:1, pForm:'sie', pTalk:'kurz', apiBudget:20,
-  fastMode:true, unbegrenzt:false, freiheit:'mitdenken', rueckruf:true, allowThird:false, maxThird:5, agentRemote:false, ctxPrefetch:true, briefMorning:'', briefEvening:'', theme:'holo', handCtl:false, elKey:'', elVoice:'', dgKey:'', keyEnc:null, quietFrom:'22:00', quietTo:'07:00', maxCalls:3, budget:10
+  fastMode:true, sparmodus:true, unbegrenzt:false, freiheit:'mitdenken', rueckruf:true, allowThird:false, maxThird:5, agentRemote:false, ctxPrefetch:true, briefMorning:'', briefEvening:'', theme:'holo', handCtl:false, elKey:'', elVoice:'', dgKey:'', keyEnc:null, quietFrom:'22:00', quietTo:'07:00', maxCalls:3, budget:10
 }, store.get('cfg', {}));
 store.set('cfg', cfg);
 let calendarEv = store.get('calendar', []); // [{id,titel,start,dauer_min,ort,notiz}]
@@ -878,6 +881,7 @@ const tools = {
     def:{description:'Ruft eine DRITTE Person oder Firma ECHT an (über den JARVIS-Server/Twilio) und führt das Gespräch selbst als KI-Assistent – z.B. Tisch reservieren, Termin anfragen, Öffnungszeiten oder Verfügbarkeit erfragen. JARVIS sagt am Anfang, dass er eine KI ist. Der Nutzer muss jeden Anruf freigeben. Nummer vorher recherchieren (web_search) oder vom Nutzer. ziel = konkreter Auftrag inkl. erlaubtem Spielraum (z.B. „19 Uhr, 18:30–19:30 ok“); darf_sagen = welche Daten genannt werden dürfen (Name, Personenzahl …). Das Ergebnis kommt nach dem Gespräch automatisch – dann weitermachen (z.B. Kalendereintrag). Ohne Server: open_app phone, der Nutzer ruft selbst.',
       input_schema:S({nummer:{type:'string'}, name:{type:'string', description:'wen du anrufst'}, ziel:{type:'string'}, darf_sagen:{type:'string'}, datum:{type:'string', description:'Tag, um den es geht (YYYY-MM-DD) – damit JARVIS freie Zeiten im Kalender des Nutzers kennt'}, spielraum:{type:'string', description:'Welche Alternativen JARVIS am Telefon selbst annehmen darf, z.B. „18:00–21:00 am selben Tag oder Sonntag gleiche Zeit“. Denk mit: wähle einen sinnvollen Rahmen passend zu Kalender und Anlass.'}}, ['nummer', 'name', 'ziel'])},
     async run({nummer, name, ziel, darf_sagen = '', datum = '', spielraum = ''}){
+      if (cfg.sparmodus) return {nicht_möglich:true, grund:'Sparmodus (max. 2 Fr./Monat) ist an: echte Anrufe über Twilio kosten extra und sind darin aus. Kostenlose Wege: online reservieren/anfragen (Website über pc_browser oder Recherche) oder open_app phone mit fertigem Gesprächstext, damit der Nutzer selbst anruft. Der Nutzer kann den Sparmodus in den Einstellungen ausschalten.'};
       if (!cfg.srv || !cfg.srvTok) return {nicht_möglich:true, grund:'Kein JARVIS-Server eingerichtet – echte Anrufe an Dritte gehen nur über den Server (Twilio). Alternative: open_app phone mit der Nummer, der Nutzer ruft selbst.'};
       if (!cfg.allowThird) return {nicht_möglich:true, grund:'Anrufe an Dritte sind in den Einstellungen ausgeschaltet. Der Nutzer kann sie unter TELEFONIE einschalten.'};
       if (cfg.freiheit === 'vorsichtig') spielraum = '';   // careful mode: no own alternatives
@@ -1336,7 +1340,11 @@ async function srv(path, method = 'GET', body){
   const r = await fetch(cfg.srv + path, {method, headers:{authorization:'Bearer ' + cfg.srvTok, 'content-type':'application/json'}, body: body ? JSON.stringify(body) : undefined});
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.fehler || 'HTTP ' + r.status); return j;
 }
-async function syncWatchersToServer(){ if (cfg.srv && cfg.srvTok) try{ await srv('/api/watchers', 'PUT', {briefing:{morgen:cfg.briefMorning, abend:cfg.briefEvening, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, anrede:cfg.name, ort:ctxSnap?.pos || null, termine:calendarEv.filter(e => new Date(e.start) > Date.now() - 864e5 && new Date(e.start) < Date.now() + 8 * 864e5).map(e => ({titel:e.titel, start:e.start}))}, watchers: watchers.map(w => ({id:w.id, regel:w.regel, intervall_min:w.intervall_min, stufe:w.stufe})), policy:{unbegrenzt:!!cfg.unbegrenzt, rückruf:!!(cfg.rueckruf && cfg.allowCall), dritteErlaubt:!!cfg.allowThird, maxDritte:+cfg.maxThird || 5, dritteVon:'08:00', dritteBis:'20:00', quietFrom:cfg.quietFrom, quietTo:cfg.quietTo, maxCalls:cfg.maxCalls, budget:cfg.budget, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, persona:{humor:cfg.pHumor, sarkasmus:cfg.pSark, anrede:cfg.pForm, name:cfg.name}}}); }catch(e){ console.warn('Wächter-Sync', e.message); } }
+let lastSyncBody = store.get('lastSyncBody', ''), lastSyncTs = store.get('lastSyncTs', 0);
+async function syncWatchersToServer(){ if (cfg.srv && cfg.srvTok) try{ const body = {briefing:{morgen:cfg.briefMorning, abend:cfg.briefEvening, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, anrede:cfg.name, ort:ctxSnap?.pos || null, termine:calendarEv.filter(e => new Date(e.start) > Date.now() - 864e5 && new Date(e.start) < Date.now() + 8 * 864e5).map(e => ({titel:e.titel, start:e.start}))}, watchers: watchers.map(w => ({id:w.id, regel:w.regel, intervall_min:w.intervall_min, stufe:w.stufe})), policy:{sparmodus:!!cfg.sparmodus, kiBudgetServer:cfg.sparmodus ? SPAR_SERVER_USD : null, unbegrenzt:!!cfg.unbegrenzt, rückruf:!!(cfg.rueckruf && cfg.allowCall), dritteErlaubt:!!cfg.allowThird, maxDritte:+cfg.maxThird || 5, dritteVon:'08:00', dritteBis:'20:00', quietFrom:cfg.quietFrom, quietTo:cfg.quietTo, maxCalls:cfg.maxCalls, budget:cfg.budget, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, persona:{humor:cfg.pHumor, sarkasmus:cfg.pSark, anrede:cfg.pForm, name:cfg.name}}};
+    const j = JSON.stringify(body); if (j === lastSyncBody && Date.now() - lastSyncTs < 6 * 3600e3) return;   // 5.7: only when changed (Cloudflare free: 1000 writes/day)
+    await srv('/api/watchers', 'PUT', body); lastSyncBody = j; lastSyncTs = Date.now(); store.set('lastSyncBody', j); store.set('lastSyncTs', lastSyncTs);
+  }catch(e){ console.warn('Wächter-Sync', e.message); } }
 async function pollInbox(){
   if (!cfg.srv || !cfg.srvTok || busy) return;
   try{
@@ -1382,7 +1390,7 @@ async function agentCallRemote(aktion, args){
     await new Promise(r => setTimeout(r, wait)); wait = Math.min(2500, wait * 1.4);
     const r = await srv('/api/agent/ergebnis?id=' + encodeURIComponent(id));
     if (r.fertig){ if (!r.ok) throw new Error(r.data); return r.data; }
-    if (Date.now() - t0 > 12000 && (!r.agent_zuletzt || Date.now() - r.agent_zuletzt > 60000)) throw new Error('PC-Agent über den Server nicht erreichbar (Laptop aus oder Agent nicht im Fernmodus gestartet). Nichts ausgeführt.');
+    if (Date.now() - t0 > 12000 && (!r.agent_zuletzt || Date.now() - r.agent_zuletzt > 7 * 60e3)) throw new Error('PC-Agent über den Server nicht erreichbar (Laptop aus oder Agent nicht im Fernmodus gestartet). Nichts ausgeführt.');
   }
   throw new Error('PC-Agent antwortet nicht (Zeitüberschreitung über den Server). Der Auftrag verfällt nach 2 Minuten und wird nicht mehr ausgeführt.');
 }
@@ -1455,7 +1463,8 @@ async function contactUser({stufe='hinweis', titel='J.A.R.V.I.S.', nachricht, dr
       res.push = r.ok ? `zugestellt an ntfy (HTTP ${r.status})` : `fehlgeschlagen (HTTP ${r.status})`;
     }catch(e){ res.push = 'fehlgeschlagen: ' + e.message; }
   }
-  if (level === 'anruf' && cfg.srv && cfg.srvTok){
+  if (level === 'anruf' && cfg.sparmodus) res.telefonanruf = 'Sparmodus: kein Twilio-Anruf (kostet extra) – stattdessen Alarm-Push und Telegram-Anruf (gratis).';
+  if (level === 'anruf' && cfg.srv && cfg.srvTok && !cfg.sparmodus){
     try{ const r = await srv('/api/call', 'POST', {anlass: titel, nachricht, dringlichkeit}); if (r.ok){ callLog.push(Date.now()); store.set('callLog', callLog.slice(-100)); } res.telefonanruf = r.ok ? `ECHTER Telefonanruf über Twilio beauftragt (Status ${r.status}). Ergebnis des Gesprächs kommt in den Posteingang.` : 'nicht möglich: ' + r.grund; }
     catch(e){ res.telefonanruf = 'fehlgeschlagen: ' + e.message; }
   }
@@ -1478,12 +1487,12 @@ async function checkWatcher(w){
   const wTools = {get_weather:tools.get_weather, get_device_status:tools.get_device_status, get_location:tools.get_location};
   const defs = Object.entries(wTools).map(([name,t]) => ({name, ...t.def}));
   defs.push({name:'bericht', description:'Abschlussbericht der Prüfung. Genau einmal am Ende aufrufen.', input_schema:S({ausgelöst:{type:'boolean'}, meldung:{type:'string', description:'Kurze Meldung an den Nutzer (nur relevant wenn ausgelöst)'}, stand:{type:'string', description:'Aktueller Messwert/Stand in einem Satz'}}, ['ausgelöst','stand'])});
-  defs.push(cfg.model.startsWith('claude-haiku') ? {type:'web_search_20250305', name:'web_search', max_uses:3} : {type:'web_search_20260209', name:'web_search', max_uses:3});
+  defs.push(effModel().startsWith('claude-haiku') ? {type:'web_search_20250305', name:'web_search', max_uses:cfg.sparmodus ? 1 : 3} : {type:'web_search_20260209', name:'web_search', max_uses:3});
   const msgs = [{role:'user', content:`Zeit: ${new Date().toLocaleString('de-CH')}\nRegel des Nutzers: "${w.regel}"\nLetzter Stand: ${w.last || '—'}\nPrüfe mit deinen Werkzeugen, ob die Regel JETZT ausgelöst ist. Rufe am Ende genau einmal "bericht" auf.`}];
   for (let i = 0; i < 6; i++){
-    const params = {model:cfg.model, max_tokens:8000, system:'Du bist das Wächter-Modul von J.A.R.V.I.S. Prüfe sachlich und knapp. Lös nur aus, wenn die Bedingung wirklich erfüllt ist.', messages:msgs, tools:defs, output_config:{effort:'low'}};
-    if (!cfg.model.startsWith('claude-haiku')){ params.betas = ['server-side-fallback-2026-07-01']; params.fallbacks = 'default'; }
-    const m = await c.beta.messages.stream(params).finalMessage(); trackUsage(m.model || cfg.model, m.usage);
+    const params = {model:effModel(), max_tokens:8000, system:'Du bist das Wächter-Modul von J.A.R.V.I.S. Prüfe sachlich und knapp. Lös nur aus, wenn die Bedingung wirklich erfüllt ist.', messages:msgs, tools:defs, output_config:{effort:'low'}};
+    if (!params.model.startsWith('claude-haiku')){ params.betas = ['server-side-fallback-2026-07-01']; params.fallbacks = 'default'; }
+    const m = await c.beta.messages.stream(params).finalMessage(); trackUsage(m.model || params.model, m.usage);
     msgs.push({role:'assistant', content:m.content});
     if (m.stop_reason === 'pause_turn') continue;
     const uses = m.content.filter(b => b.type === 'tool_use');
@@ -1784,7 +1793,10 @@ function trackUsage(model, u){
   const usd = ((u.input_tokens || 0) * P.i + (u.output_tokens || 0) * P.o + (u.cache_read_input_tokens || 0) * P.cr + (u.cache_creation_input_tokens || 0) * P.cw) / 1e6 + (u.server_tool_use?.web_search_requests || 0) * 0.01;
   costLog[monthKey()] = monthCost() + usd; store.set('costLog', costLog); return usd;
 }
-function budgetBlocked(){ return !cfg.unbegrenzt && monthCost() >= (cfg.apiBudget || 20); }   // 5.6: no limit when „Keine Limits“ is on (Anthropic console limit still applies)
+// 5.7 Sparmodus: total ≤ 2 USD (≈ 1.70–1.80 Fr.) per month – 1.60 for the app, 0.40 for the server; Haiku for everything
+const SPAR_APP_USD = 1.60, SPAR_SERVER_USD = 0.40;
+const effModel = () => cfg.sparmodus ? 'claude-haiku-5-5' : cfg.model;
+function budgetBlocked(){ if (cfg.sparmodus) return monthCost() >= SPAR_APP_USD; return !cfg.unbegrenzt && monthCost() >= (cfg.apiBudget || 20); }   // 5.6: no limit when „Keine Limits“ is on (Anthropic console limit still applies)
 
 /* =========================================================
    CLAUDE BRAIN
@@ -1835,6 +1847,7 @@ function rememberLines(text){
 }
 function freiheitPrompt(){
   const L = cfg.freiheit || 'mitdenken';
+  const spar = cfg.sparmodus ? '\n- SPARMODUS (max. 2 Fr./Monat): halte dich kurz, nutze Websuche nur, wenn wirklich nötig (max. 2), bevorzuge kostenlose Wege (Lagebild, Gedächtnis, Wissensordner, Website statt Telefon). Echte Anrufe über Twilio sind aus.' : '';
   const rules = {
     vorsichtig:'Vor JEDER verbindlichen Aktion (Buchung, Reservierung, Anruf bei Dritten, Nachricht an andere, Zahlung, Löschen) fragst du zuerst. Am Telefon keine Alternativen annehmen.',
     mitdenken:'Was der Nutzer dir aufgetragen hat (reservieren, Termin machen, anrufen, anmelden), erledigst du OHNE erneute Rückfrage – inklusive einer passenden Alternative, falls sein Wunsch nicht geht. Nachrichten an andere, Zahlungen und Löschen: vorher fragen.',
@@ -1847,7 +1860,7 @@ function freiheitPrompt(){
 - Nach jeder eigenen Entscheidung, die er anders gewollt haben könnte → rückmeldung (mit 1–3 Alternativen). wichtig=true, wenn er es bald wissen muss.
 - Denk einen Schritt weiter und erledige es, wenn kostenlos und umkehrbar: Kalendereintrag nach Zusage, Erinnerung vorher, Anfahrt/Wetter zum Termin, Konflikte lösen, Folgeaufgaben notieren.
 - Denk auch beim Geld mit: kein kostenpflichtiger Weg (Anruf, Websuche-Kaskaden, grosse Modelle), wenn ein kostenloser gleich gut ist. Zahlungen nie ohne Frage.
-- Gibt der Nutzer per Klick, Telefon oder Nachricht eine Änderung durch, setz sie direkt um.`;
+- Gibt der Nutzer per Klick, Telefon oder Nachricht eine Änderung durch, setz sie direkt um.${spar}`;
 }
 function systemPrompt(){
   return `${personaPrompt()}
@@ -1909,11 +1922,12 @@ Jede Nutzernachricht beginnt mit einem Zeitstempel [Lokalzeit …] und ggf. [Off
 Was du über den Nutzer weisst:
 ${memory.length ? memory.map(m => `- ${m.text} (id ${m.id})`).join('\n') : '- (noch nichts gespeichert)'}`;
 }
-function toolDefs(model = cfg.model){
+function toolDefs(model = effModel()){
   const isHaiku = model.startsWith('claude-haiku');
   const defs = Object.entries(tools).map(([name, t]) => ({name, ...t.def, eager_input_streaming:true}));
-  defs.push(isHaiku ? {type:'web_search_20250305', name:'web_search', max_uses:5}
-                    : {type:'web_search_20260209', name:'web_search', max_uses:5});
+  const searches = cfg.sparmodus ? 2 : 5;   // each search costs ~1 Rappen
+  defs.push(isHaiku ? {type:'web_search_20250305', name:'web_search', max_uses:searches}
+                    : {type:'web_search_20260209', name:'web_search', max_uses:searches});
   if (!isHaiku) defs.push({type:'web_fetch_20260209', name:'web_fetch', max_uses:3});
   return defs;
 }
@@ -1937,7 +1951,7 @@ async function handleInput(text, imageDataUrl, opts = {}){
     setState('think'); const plan = await planVisual(text); ctxLines += planNote(plan, text);
     // 5.2 fast mode: simple things → Haiku answers directly; bigger things → say a short line NOW, the strong model works behind it
     if (cfg.fastMode && plan){
-      if (plan.einfach && !plan.visualisieren && !cfg.model.startsWith('claude-haiku')){ turnModel = 'claude-haiku-5-5'; lastRoute = 'schnell'; }
+      if (plan.einfach && !plan.visualisieren && !effModel().startsWith('claude-haiku')){ turnModel = 'claude-haiku-5-5'; lastRoute = 'schnell'; }
       else if (plan.sofort && !plan.einfach){ lastRoute = 'sofort+stark'; const line = plan.sofort.slice(0, 90); sysLine('⚡ ' + esc(line)); if (cfg.speak) speak(line); ctxLines += `\n[Bereits sofort gesagt: „${line}“ – nicht wiederholen, direkt mit der Sache weitermachen]`; }
       else lastRoute = 'stark';
     }
@@ -1958,7 +1972,7 @@ async function handleInput(text, imageDataUrl, opts = {}){
 let turnModel = null, lastRoute = '', lastModelUsed = null;
 const stripThinking = (msgs, upto) => msgs.map((m, i) => i < upto && m.role === 'assistant' && Array.isArray(m.content) ? {...m, content: m.content.filter(b => !/thinking/.test(b.type))} : m);
 async function runAgent(){
-  const model = turnModel || cfg.model; turnModel = null; const turnStart = history.length;
+  const model = turnModel || effModel(); turnModel = null; const turnStart = history.length;
   const switched = lastModelUsed && lastModelUsed !== model; lastModelUsed = model;
   busy = true; setState('think'); chirpOn(); hud.pulse(.8);
   const c = getClient();
@@ -2105,6 +2119,7 @@ function renderPending(body){
    ========================================================= */
 function fillSettings(){
   document.querySelectorAll('#settings [data-k]').forEach(el => { const v = cfg[el.dataset.k]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v ?? ''; });
+  { const e = document.getElementById('sparNow'); if (e) e.textContent = `Diesen Monat: ${monthCost().toFixed(2)} von ${cfg.sparmodus ? SPAR_APP_USD.toFixed(2) : (cfg.unbegrenzt ? '∞' : (cfg.apiBudget || 20))} USD (App)`; }
   { const e = document.getElementById('elNow'); if (e) e.textContent = (elChars[monthKey()] ? `· diesen Monat ${elChars[monthKey()]} Zeichen` : ''); }
   $('#cfgKey').value = cfg.key; $('#cfgName').value = cfg.name; $('#cfgModel').value = cfg.model; $('#cfgEffort').value = cfg.effort;
   $('#cfgLang').value = cfg.lang; $('#cfgRate').value = cfg.rate; $('#cfgPitch').value = cfg.pitch;
@@ -2539,10 +2554,11 @@ async function judgeVisual(r){
     lektion:{type:'string', description:'Eine konkrete, allgemeine Regel (max. 140 Zeichen), wie JARVIS solche Themen künftig besser darstellt. Leer, wenn alles gut war.'}}};
   const img = d => ({type:'image', source:{type:'base64', media_type:d.startsWith('data:image/png') ? 'image/png' : 'image/jpeg', data:d.split(',')[1]}});
   try{
-    const m = await c.messages.create({model:'claude-sonnet-5-5', max_tokens:1500, output_config:{format:{type:'json_schema', schema}},
+    const judgeModel = cfg.sparmodus ? 'claude-haiku-5-5' : 'claude-sonnet-5-5';
+    const m = await c.messages.create({model:judgeModel, max_tokens:1500, output_config:{format:{type:'json_schema', schema}},
       system:'Du bist ein strenger, unabhängiger Prüfer für 3D-Erklärgrafiken. Bewerte ehrlich, nicht wohlwollend. Bewegung beurteilst du am Unterschied der beiden Bilder (1,4 s Abstand) und an den Phasen im Bericht. Fachfehler wiegen schwer.',
       messages:[{role:'user', content:[img(r.bild), ...(r.bild2 ? [img(r.bild2)] : []), {type:'text', text:`Frage des Nutzers: ${r.frage}\nAntwort von JARVIS: ${r.antwort || '-'}\nQualitätsbericht: ${JSON.stringify(r.bericht || {}).slice(0, 1500)}\nFPS: ${r.fps || '?'}`}]}]});
-    trackUsage('claude-sonnet-5-5', m.usage);
+    trackUsage(judgeModel, m.usage);
     const j = JSON.parse(m.content.find(b => b.type === 'text').text);
     if (j.lektion && j.lektion.length > 10) addLesson(j.lektion);
     return j;
@@ -2583,6 +2599,15 @@ $('#pasteKey').onclick = async () => {
   try{ const t = (await navigator.clipboard.readText()).trim(); if (/^sk-ant-[\w-]{20,}$/.test(t)){ $('#cfgKey').value = t; toast('🔑 Key eingefügt – jetzt „ALLES FREISCHALTEN“.'); } else toast('In der Zwischenablage ist kein Anthropic-Key (beginnt mit sk-ant-). Erst auf console.anthropic.com kopieren.'); }
   catch{ toast('Einfügen nicht erlaubt – halte im Feld gedrückt und wähle „Einfügen“.'); }
 };
+/* 5.7: install as a real app (Chrome WebAPK: own icon, no address bar, updates itself) */
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; const b = document.getElementById('installApp'); if (b) b.classList.add('primary'); });
+window.addEventListener('appinstalled', () => { installEvt = null; toast('📲 JARVIS ist jetzt als App installiert – du findest ihn bei deinen Apps.'); });
+$('#installApp').onclick = async () => {
+  if (matchMedia('(display-mode: standalone)').matches || navigator.standalone) return toast('✅ Du benutzt JARVIS schon als App.');
+  if (installEvt){ installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); installEvt = null; if (r?.outcome === 'accepted') toast('📲 Wird installiert …'); return; }
+  toast(/iPhone|iPad/.test(navigator.userAgent) ? 'iPhone: Teilen-Symbol → „Zum Home-Bildschirm“.' : 'In Chrome: Menü ⋮ → „App installieren“ (oder „Zum Startbildschirm hinzufügen“). Oder die APK laden: jay-create8.github.io/jarvis/JARVIS.apk');
+};
 $('#unlockAll').onclick = async () => {
   const out = $('#quickRes'), res = [];
   const show = () => { out.innerHTML = res.map(([n, r]) => `${r === true ? '✅' : r === null ? '⏳' : '⚠️'} <b>${esc(n)}</b>${r === true || r === null ? '' : ' – ' + esc(r)}`).join('<br>'); };
@@ -2598,7 +2623,7 @@ $('#unlockAll').onclick = async () => {
   Object.assign(cfg, {freiheit:'frei', unbegrenzt:true, allowCall:true, allowThird:true, rueckruf:true, fastMode:true, ctxPrefetch:true, speak:true, quietFrom:'00:00', quietTo:'00:00',
     wake:media || cfg.wake, agentRemote:!!(cfg.srv && cfg.srvTok) || cfg.agentRemote});
   store.set('cfg', cfg); fillSettings(); syncWatchersToServer(); applyWakeLock(); afterIdle();
-  res.push(['Maximale Freiheit: Freie Hand, keine Limits, Anrufe an dich und andere erlaubt, „Hey Jarvis“ an', true]);
+  res.push(['Maximale Freiheit: Freie Hand, keine Limits, Anrufe an dich und andere erlaubt, „Hey Jarvis“ an' + (cfg.sparmodus ? ' – Kostendeckel 2 Fr. bleibt (Sparmodus)' : ''), true]);
   if (!cfg.key && !cfg.keyEnc) res.push(['Anthropic-Key fehlt – ohne ihn kann JARVIS nicht denken', 'console.anthropic.com → API Keys → kopieren → „KEY EINFÜGEN“']);
   if (!cfg.srv) res.push(['Telefon & Laptop-Fernsteuerung', 'brauchen zusätzlich den JARVIS-Server (Einrichtungs-Assistent)']);
   show();
@@ -2607,7 +2632,7 @@ $('#unlockAll').onclick = async () => {
 };
 for (const id of ['kFiles', 'kFolder']) $('#' + id).onchange = async (e) => { const n = await kImport([...e.target.files]); toast(`📚 ${n} Dateien eingelesen – ${kIndex?.N || 0} Abschnitte durchsuchbar.`); e.target.value = ''; };
 $('#kClear').onclick = async () => { if (!confirm('Wissensordner auf diesem Gerät leeren?')) return; const root = await navigator.storage.getDirectory(); await root.removeEntry('wissen', {recursive:true}).catch(() => {}); await kBuild(); toast('Wissensordner geleert.'); };
-$('#testSrv').onclick = async () => { readSettings(); try{ const r = await srv('/api/status'); toast(`Server OK · Telefon: ${r.twilio ? 'eingerichtet' : 'nicht eingerichtet'} · Wächter: ${r.wächter} · letzter Cron: ${r.heartbeat ? new Date(r.heartbeat.ts).toLocaleString('de-CH') : 'noch nie'}`); syncWatchersToServer(); }catch(e){ toast('Server: ' + e.message); } };
+$('#testSrv').onclick = async () => { readSettings(); try{ const r = await srv('/api/status'); toast(`Server OK · Telefon: ${r.twilio ? 'eingerichtet' : 'nicht eingerichtet'} · Wächter: ${r.wächter} · Server-KI diesen Monat: ${(r.ki_kosten_monat_usd || 0).toFixed(2)} USD · letzter Cron: ${r.heartbeat ? new Date(r.heartbeat.ts).toLocaleString('de-CH') : 'noch nie'}`); syncWatchersToServer(); }catch(e){ toast('Server: ' + e.message); } };
 $('#connectAgent').onclick = () => { readSettings(); if (agentWs) agentWs.close(); agentWs = null; agentConnect(); };
 $('#testPush').onclick = async () => { readSettings(); const r = await contactUser({stufe:'push', titel:'J.A.R.V.I.S.', nachricht:'Test-Push: Verbindung steht.'}); toast('Push: ' + (r.push || '—')); };
 $('#pHumor').oninput = e => $('#pHumorVal').textContent = ['aus','selten','gelegentlich','oft'][e.target.value];
