@@ -1,4 +1,6 @@
-# J.A.R.V.I.S. 5.7 🤖
+# J.A.R.V.I.S. 5.7.1 🤖
+
+> **5.7.1:** Wichtige Korrektur – JARVIS hätte bei neuen Anthropic-Konten nach der ersten Gedächtnis-/Einstellungsänderung jede weitere Nachricht mit einem Fehler abgebrochen. Jetzt bleibt das Gespräch gültig, lange Chats bleiben günstig (Details: STATUS-5.7.md, Abschnitt 5.7.1).
 
 > **Neu in 5.7: echte App + max. 2 Fr. im Monat.**
 > - **App:** Einstellungen → SCHNELLSTART → **📲 ALS APP INSTALLIEREN** (Chrome macht daraus eine echte App) – oder die

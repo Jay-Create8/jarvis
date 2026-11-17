@@ -1862,6 +1862,33 @@ function freiheitPrompt(){
 - Denk auch beim Geld mit: kein kostenpflichtiger Weg (Anruf, Websuche-Kaskaden, grosse Modelle), wenn ein kostenloser gleich gut ist. Zahlungen nie ohne Frage.
 - Gibt der Nutzer per Klick, Telefon oder Nachricht eine Änderung durch, setz sie direkt um.${spar}`;
 }
+// 5.7: the parts that can change during a conversation – sent as an appended system note instead of editing the system prompt
+function dynamicPrompt(){
+  return `${personaPrompt()}\n\n${freiheitPrompt()}\n\nKontaktregeln des Nutzers: ${cfg.rules || '(keine)'} · Anrufe erlaubt: ${cfg.allowCall ? 'ja' : 'nein'} · Push: ${cfg.ntfy ? 'ja' : 'nein'}\n\nWas du über den Nutzer weisst:\n${memory.length ? memory.map(m => `- ${m.text} (id ${m.id})`).join('\n') : '- (noch nichts gespeichert)'}`;
+}
+let convSystem = null, convDyn = null;   // snapshot per conversation: system prompt stays byte-identical (cache + thinking blocks stay valid)
+function syncConversationPrompt(){
+  const last = history.at(-1);
+  if (!convSystem || history.length <= 1){ convSystem = systemPrompt(); convDyn = dynamicPrompt(); return; }
+  const now = dynamicPrompt();
+  if (now !== convDyn && last?.role === 'user' && !(Array.isArray(last.content) && last.content.some(b => b.type === 'tool_result'))){
+    history.push({role:'system', content:'AKTUALISIERT – diese Angaben ersetzen ab jetzt die entsprechenden Teile (Persönlichkeit, Freiheit, Kontaktregeln, Gedächtnis) deines Systemprompts:\n\n' + now});
+    convDyn = now;
+  }
+}
+// 5.7: conversation window – long chats get expensive (Haiku ×5 above 100K tokens) and slow; long-term facts live in memory anyway
+const estTokens = (x) => Math.round(JSON.stringify(x).length / 3.2);
+function trimHistory(maxTok = 60000, keepTok = 30000){
+  if (estTokens(history) <= maxTok) return false;
+  let i = 0;
+  while (i < history.length - 1 && (estTokens(history.slice(i)) > keepTok || !(history[i].role === 'user' && !(Array.isArray(history[i].content) && history[i].content.some(b => b.type === 'tool_result'))))) i++;
+  const isUserText = (m) => m && m.role === 'user' && !(Array.isArray(m.content) && m.content.some(b => b.type === 'tool_result'));
+  if (!isUserText(history[i])) i = history.length;   // no clean cut → start fresh (a conversation must begin with your message)
+  if (i === 0) return false;
+  history = history.slice(i); convSystem = null;   // new snapshot on the next request; the API drops thinking blocks that no longer fit (drop_block)
+  sysLine('🧹 Ältere Nachrichten ausgeblendet (Gespräch war sehr lang) – Wichtiges bleibt im Gedächtnis.');
+  return true;
+}
 function systemPrompt(){
   return `${personaPrompt()}
 
@@ -1965,15 +1992,15 @@ async function handleInput(text, imageDataUrl, opts = {}){
   const sysN = notices.splice(0).concat(uiErrors.splice(0));
   if (sysN.length) ctxLines += `\n[Systemhinweise: ${sysN.join(' | ')}]`;
   content.push({type:'text', text: stamp + ctxLines + '\n' + (text || 'Was siehst du auf diesem Bild?')});
+  trimHistory();
   history.push({role:'user', content});
   await runAgent();
 }
 
 let turnModel = null, lastRoute = '', lastModelUsed = null;
-const stripThinking = (msgs, upto) => msgs.map((m, i) => i < upto && m.role === 'assistant' && Array.isArray(m.content) ? {...m, content: m.content.filter(b => !/thinking/.test(b.type))} : m);
 async function runAgent(){
   const model = turnModel || effModel(); turnModel = null; const turnStart = history.length;
-  const switched = lastModelUsed && lastModelUsed !== model; lastModelUsed = model;
+  lastModelUsed = model; syncConversationPrompt();
   busy = true; setState('think'); chirpOn(); hud.pulse(.8);
   const c = getClient();
   const aiEl = addMsg('ai', ''); const body = aiEl.querySelector('.body');
@@ -1989,13 +2016,15 @@ async function runAgent(){
       const params = {
         model,
         max_tokens: model.startsWith('claude-haiku') ? 8000 : 32000,
-        system: systemPrompt(),
-        messages: switched ? stripThinking(history, turnStart) : history,   // thinking blocks of another model are dropped (older turns only)
+        system: convSystem,
+        messages: history,   // append-only; never strip thinking blocks ourselves (Claude docs) – the API drops mismatched ones
+        thinking: {type:'adaptive', block_binding:{prefix_mismatch_behavior:'drop_block'}},   // otherwise a changed history returns HTTP 400 on new accounts
         tools: toolDefs(model),
         output_config: {effort: model.startsWith('claude-haiku') ? 'low' : cfg.effort},
         cache_control: {type:'ephemeral'},
       };
-      if (!model.startsWith('claude-haiku')){ params.betas = ['server-side-fallback-2026-07-01']; params.fallbacks = 'default'; }
+      params.betas = ['thinking-binding-controls-2026-08-01'];
+      if (!model.startsWith('claude-haiku')){ params.betas.push('server-side-fallback-2026-07-01'); params.fallbacks = 'default'; }
       const stream = c.beta.messages.stream(params);
       const chips = {}, chipById = {}, srvInput = {};
       stream.on('streamEvent', ev => {

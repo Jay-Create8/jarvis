@@ -41,3 +41,25 @@ Sparmodus aus = volle Qualität, dann gilt das eigene Budget.
 | Installieren-Knopf | ✅ (Installations-Abfrage nachgestellt) |
 | APK | gebaut, Signatur geprüft, Manifest geprüft, Lint 0 Fehler |
 | Betroffene App-Tests (Schnell-Modus, Kosten, PIN, Freiheit ×2, Telefon, Fernsteuerung, Wächter, Briefing, Selbsttest, Persönlichkeit, Einrichtungs-Link, Ein Knopf, Sparmodus, Installieren, Sprachkette, Autokorrektur) | **17/17** ✅ |
+
+## 5.7.1 – Wichtige Korrektur: JARVIS hätte nach der ersten Nachricht aufhören können
+**Gefunden durch deine Frage „stoppt es nach einer Nachricht?“.** Laut Claude-Dokumentation lehnt die API bei Konten, die nach dem
+31.08.2026 erstellt wurden (also deinem neuen), jede Anfrage mit **HTTP 400** ab, wenn sich mitten im Gespräch der Systemprompt, die
+Werkzeugliste oder frühere Nachrichten ändern und dabei „Denkblöcke“ des Modells mitgeschickt werden. JARVIS änderte genau das:
+- Gedächtnis („Merk dir …“), Selbsttest-Lektionen und Einstellungen standen im Systemprompt → nach der ersten Änderung wäre **jede weitere Nachricht** gescheitert.
+- Beim Wechsel Haiku↔Opus (Schnell-Modus) entfernte JARVIS Denkblöcke selbst – die Doku rät ausdrücklich davon ab (kann ebenfalls 400 auslösen).
+In den Tests war das nicht sichtbar, weil die KI dort nachgestellt ist und keine Denkblöcke prüft.
+
+**Behoben (alles nach der offiziellen Doku):**
+| Massnahme | Wirkung |
+|---|---|
+| `thinking.block_binding.prefix_mismatch_behavior: "drop_block"` + Header `thinking-binding-controls-2026-08-01` | Statt Fehler verwirft die API nur veraltete Denkblöcke – das Gespräch läuft weiter |
+| Systemprompt bleibt pro Gespräch gleich; Änderungen (Gedächtnis, Persönlichkeit, Freiheit, Kontaktregeln) kommen als angehängte System-Notiz | Denkblöcke bleiben gültig, **Prompt-Cache bleibt erhalten → günstiger** |
+| Kein eigenes Entfernen von Denkblöcken mehr | wie von der Doku verlangt |
+| Gesprächsfenster: ab ~60'000 Tokens werden ältere Nachrichten ausgeblendet | lange Chats bleiben schnell und günstig (Haiku kostet über 100'000 Tokens 5× mehr) |
+
+| Test | Ergebnis | Kategorie |
+|---|---|---|
+| Mehrere Nachrichten mit Gedächtnis-Änderung: Systemprompt byte-gleich, eine System-Notiz direkt nach deiner Nachricht, Verlauf nur ergänzt, `drop_block` + Header in jeder Anfrage, Fenster greift bei sehr langem Chat | ✅ | Anfrage-Inhalte echt geprüft · 🟡 KI-Antworten nachgestellt |
+| Ob die echte API das so annimmt | – | ⚪ braucht deinen Key (Selbsttest im Sparmodus ≈ 0.05–0.15 USD) |
+| Gesamt-Regression nach der Korrektur | **39/39** (37 im Gesamtlauf, Kontext-Vorrat + Wissensordner im Einzel-Lauf grün – bekannte Last-/Wetterdienst-Schwankung) | ✅ Ablauf · 🟡 KI |
