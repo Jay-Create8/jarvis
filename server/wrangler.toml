@@ -1,0 +1,13 @@
+name = "jarvis-server"
+main = "worker.js"
+compatibility_date = "2025-09-24"
+
+[[kv_namespaces]]
+binding = "JARVIS_KV"
+id = "HIER_DIE_KV_ID_EINTRAGEN"   # npx wrangler kv namespace create JARVIS_KV
+
+[triggers]
+crons = ["*/15 * * * *"]           # Wächter alle 15 Minuten – auch bei geschlossener App
+
+[vars]
+PUBLIC_URL = ""                    # z.B. https://jarvis-server.DEINNAME.workers.dev
