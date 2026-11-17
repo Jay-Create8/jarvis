@@ -1,4 +1,6 @@
-# J.A.R.V.I.S. 5.7.1 🤖
+# J.A.R.V.I.S. 5.7.2 🤖
+
+> **5.7.2:** Für langsames Netz: Nach dem ersten Laden startet JARVIS in ca. 3 s direkt vom Handy (auch offline), statt jedes Mal über das Netz zu laden. Beim ersten Mal zeigt er, dass er lädt.
 
 > **5.7.1:** Wichtige Korrektur – JARVIS hätte bei neuen Anthropic-Konten nach der ersten Gedächtnis-/Einstellungsänderung jede weitere Nachricht mit einem Fehler abgebrochen. Jetzt bleibt das Gespräch gültig, lange Chats bleiben günstig (Details: STATUS-5.7.md, Abschnitt 5.7.1).
 

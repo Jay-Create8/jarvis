@@ -63,3 +63,17 @@ In den Tests war das nicht sichtbar, weil die KI dort nachgestellt ist und keine
 | Mehrere Nachrichten mit Gedächtnis-Änderung: Systemprompt byte-gleich, eine System-Notiz direkt nach deiner Nachricht, Verlauf nur ergänzt, `drop_block` + Header in jeder Anfrage, Fenster greift bei sehr langem Chat | ✅ | Anfrage-Inhalte echt geprüft · 🟡 KI-Antworten nachgestellt |
 | Ob die echte API das so annimmt | – | ⚪ braucht deinen Key (Selbsttest im Sparmodus ≈ 0.05–0.15 USD) |
 | Gesamt-Regression nach der Korrektur | **39/39** (37 im Gesamtlauf, Kontext-Vorrat + Wissensordner im Einzel-Lauf grün – bekannte Last-/Wetterdienst-Schwankung) | ✅ Ablauf · 🟡 KI |
+
+## 5.7.2 – Langsames Netz (7 KB/s)
+| Messung (Leitung serverseitig auf 7 KB/s gedrosselt, Browser-Cache geleert) | Vorher (5.7.1) | Jetzt (5.7.2) |
+|---|---|---|
+| Erneutes Öffnen | **über 200 s** (noch nicht gestartet) | **3,3–3,5 s** |
+| Offline öffnen | – | **3,3 s** |
+| Erstes Öffnen | ~513 KB (gzip) → bei 7 KB/s grob 1–3 Min., ohne Hinweis | gleich gross, aber mit Ladeanzeige („Lädt … 37 s“) und Erklärung |
+
+Änderungen: Offline-Speicher startet JARVIS sofort vom Handy und lädt Updates leise im Hintergrund (vorher: zuerst über das Netz);
+grosse Dateien (Handsteuerung 21 MB, APK) nur einmal laden (vorher bei jeder Benutzung); nach dem ersten Laden werden alle
+benutzten Dateien gespeichert; KI-Modul (78 KB) lädt erst nach dem Startbildschirm; Ladeanzeige mit Zeit und Hinweis.
+Ehrlich: Eine erste Messung mit der Browser-Drosselung war irreführend (die drosselt den Offline-Speicher nicht) – deshalb ein
+eigener gedrosselter Server für die Zahlen oben. Pro Nachricht schickt JARVIS ca. 40 KB an Claude (Anweisungen + Werkzeuge);
+bei langsamem Upload dauert das ein paar Sekunden.

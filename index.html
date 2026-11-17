@@ -209,7 +209,23 @@ body.immersive #chatToggle{display:grid}
   <h1>JARVIS</h1>
   <div class="bar"><i id="bootbar"></i></div>
   <div id="bootlog"></div>
+  <div id="bootslow" style="max-width:300px;text-align:center;font:500 14px Rajdhani,system-ui,sans-serif;color:var(--mute)"></div>
 </div>
+<script>
+/* 5.7.2: shows that JARVIS is still loading on slow connections (runs before the big modules arrive) */
+(function(){
+  var t0 = Date.now(), el = document.getElementById('bootslow'), c = navigator.connection || {};
+  var first = !(navigator.serviceWorker && navigator.serviceWorker.controller);
+  var iv = setInterval(function(){
+    if (!document.getElementById('boot')) return clearInterval(iv);
+    var s = Math.round((Date.now() - t0) / 1000); if (s < 4) return;
+    el.innerHTML = 'Lädt … ' + s + ' s' + (c.downlink ? ' · Verbindung ca. ' + Math.max(1, Math.round(c.downlink * 125)) + ' KB/s' : '') +
+      (first ? '<br>Beim <b>ersten</b> Öffnen lädt JARVIS ca. 500 KB (bei langsamem Netz 1–3 Minuten). Bitte die Seite offen lassen – danach startet er sofort vom Handy.' : '<br>Startet gleich …');
+    if (s > 240) el.innerHTML += '<br><button onclick="location.reload()" style="margin-top:10px;padding:8px 14px;border-radius:8px;border:1px solid currentColor;background:none;color:inherit">Neu laden</button>';
+  }, 1000);
+  window.addEventListener('error', function(e){ if (document.getElementById('boot') && /\.m?js/.test((e.filename || '') + (e.target && e.target.src || ''))) el.innerHTML = 'Ein Teil konnte wegen der Verbindung nicht geladen werden. <button onclick="location.reload()">Neu laden</button>'; }, true);
+})();
+</script>
 
 <canvas id="bg3d"></canvas>
 <div id="app">
@@ -413,7 +429,8 @@ body.immersive #chatToggle{display:grid}
 <div id="cam"><video id="camVideo" playsinline muted></video><div class="hudline"></div><div class="label">OPTISCHER SENSOR AKTIV</div></div>
 
 <script type="module">
-import Anthropic from './anthropic-sdk.mjs';
+let Anthropic = null, sdkReady = null;   // 5.7.2: loaded after start (slow connections)
+const loadSdk = () => (sdkReady ??= import('./anthropic-sdk.mjs').then(m => { Anthropic = m.default; return Anthropic; }));
 import { createHUD } from './js/hud3d.js';
 import { createWM, WINDOW_TYPES } from './js/windows.js';
 
@@ -1803,7 +1820,7 @@ function budgetBlocked(){ if (cfg.sparmodus) return monthCost() >= SPAR_APP_USD;
    ========================================================= */
 let client = null, history = [];
 const getClient = () => {
-  const k = cfg.key || sessionKey; if (!k) return null;
+  const k = cfg.key || sessionKey; if (!k || !Anthropic) return null;
   if (!client || client.apiKey !== k) client = new Anthropic({apiKey:k, dangerouslyAllowBrowser:true, maxRetries:2});
   return client;
 };
@@ -1963,6 +1980,7 @@ async function handleInput(text, imageDataUrl, opts = {}){
   text = (text||'').trim();
   if (!text && !imageDataUrl) return;
   if (busy) return;
+  if (!Anthropic){ const w = setTimeout(() => toast('⏳ KI-Modul lädt noch (langsame Verbindung) …'), 1500); try{ await loadSdk(); }catch(e){ clearTimeout(w); toast('KI-Modul konnte nicht geladen werden – Verbindung prüfen.'); return; } clearTimeout(w); }
   const c = getClient();
   if (!c){ if (cfg.keyEnc && !sessionKey){ if (await askPin()) return handleInput(text, imageDataUrl, opts); return; } toast('Bitte zuerst deinen Anthropic API-Key in den Einstellungen eintragen.'); openSettings(); return; }
   if (budgetBlocked()){ toast(`Monatsbudget für die KI erreicht (geschätzt ${monthCost().toFixed(2)} von ${cfg.apiBudget} USD). In den Einstellungen erhöhen, wenn du weitermachen willst.`); return; }
@@ -2482,6 +2500,7 @@ async function briefingLocal(kind){
    ========================================================= */
 async function waitIdle(ms = 240000){ const t0 = Date.now(); while ((busy || eventQueue.length) && Date.now() - t0 < ms) await new Promise(r => setTimeout(r, 400)); await new Promise(r => setTimeout(r, 1500)); }
 async function selfTest(){
+  await loadSdk().catch(() => {});
   if (!getClient()){ if (cfg.keyEnc && !sessionKey){ if (!(await askPin())) return; } else { toast('Zuerst API-Key eintragen.'); return; } }
   const want = {sprache: $('#stVoice')?.checked, restaurant: $('#stResto')?.checked, anruf: $('#stCall')?.checked};
   closeSettings(); history = []; wm.closeAll(); logEl.innerHTML = ''; await new Promise(r => setTimeout(r, 500));
@@ -2712,6 +2731,10 @@ async function boot(){
     await new Promise(r => setTimeout(r, 170));
   }
   $('#boot').classList.add('hide');
+  setTimeout(() => loadSdk().catch(() => {}).finally(() => {   // 5.7.2: AI module after the start screen, then store everything used for instant offline starts
+    const urls = performance.getEntriesByType('resource').map(e => e.name.split('#')[0]).filter(u => u.startsWith(location.origin) && !/\/sw\.js|\/api\//.test(u));
+    navigator.serviceWorker?.ready.then(r => r.active?.postMessage({type:'precache', urls:[location.href.split('#')[0], ...new Set(urls)]})).catch(() => {});
+  }), 300);
   setTimeout(() => $('#boot').remove(), 900);
 }
 
