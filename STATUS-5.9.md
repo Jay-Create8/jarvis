@@ -64,3 +64,20 @@ Vorher lief die Kamera bei eingeschalteter Handsteuerung **dauernd** (mit kleine
 |---|---|
 | Neuer Test K1 (Leerlauf aus → 3D an → nach 67 s ohne Hand aus → bleibt aus → an/aus auf Zuruf) | ✅ |
 | Handsteuerung mit echtem Handvideo, 3D-Modell, Kamera-Befehle | ✅ 3/3 |
+
+## 5.9.2 – JARVIS-Stimme direkt auf dem Gerät (ohne Konto, ohne Karte, ohne Limit)
+Problem: Die Gemini-Stimme war nach ca. 10 Nachrichten pro Tag aufgebraucht; Azure verlangt ein Konto mit Kreditkarte.
+Lösung: Eine **Sprachsynthese, die auf dem Handy selbst läuft** (Piper, deutsche Stimme „Thorsten“; Datensatz von Thorsten Müller, CC0).
+Einmal laden (Stimme ~63 MB + Sprach-Engine ~29 MB, im WLAN automatisch), danach **kostenlos und unbegrenzt**, kein Konto, kein Key.
+Reihenfolge „Automatisch“: ElevenLabs → Azure → **JARVIS-Stimme** → Gemini-Stimme → Gerätestimme. Auswahl: Thorsten, Thorsten HD,
+Karlsson (männlich), Kerstin, Ramona (weiblich).
+
+| Test (echt, im Browser, echter Download) | Ergebnis |
+|---|---|
+| Laden der Stimme | 63 MB Stimme + Engine, startklar nach ~25 s (schnelle Leitung) |
+| Tempo (dieser Rechner) | „Sehr wohl.“ in 0.24 s, ein 2.6-s-Satz in 0.86 s (3× schneller als Echtzeit); auf dem Handy grob 2–4× langsamer – ⚪ ungetestet |
+| **Verständlichkeit:** unabhängige Spracherkennung (Vosk, deutsch) hört die erzeugten Sätze ab | **29 von 31 Wörtern** richtig („sonnig“ → „zornig“, „warm“ → „waren“) |
+| In der App: Antworten werden mit der JARVIS-Stimme gesprochen, keine Gemini-Stimmen-Anfragen mehr | ✅ (Test S1) |
+| Alle anderen Stimmen (Gemini, Azure, ElevenLabs, Vergleichen) | ✅ 5/5 |
+| 5.9-Tests gesamt | **11/11** |
+Ungetestet: Klang und Tempo auf deinem echten Handy.

@@ -339,11 +339,17 @@ body.immersive #chatToggle{display:grid}
   <div class="field"><label>Tonhöhe <span id="pitchVal"></span></label><input id="cfgPitch" type="range" min="0.5" max="1.5" step="0.05"></div>
   <div class="toggle"><div>Antworten vorlesen<small>JARVIS spricht jede Antwort</small></div><input type="checkbox" id="cfgSpeak"></div>
   <div class="field"><label>Stimmen-Dienst <span id="voiceNow" class="hint"></span></label><select data-k="voiceEngine">
-    <option value="auto">Automatisch – beste, die gerade gratis geht (ElevenLabs → Azure → Gemini → Gerät)</option>
-    <option value="gemini">🆓 Gemini-Stimme (gleicher Key, gratis)</option>
+    <option value="auto">Automatisch – beste, die gerade gratis geht (ElevenLabs → Azure → JARVIS-Stimme → Gemini → Gerät)</option>
+    <option value="lokal">🆓 JARVIS-Stimme auf dem Handy (gratis, ohne Konto, ohne Limit)</option>
+    <option value="gemini">🆓 Gemini-Stimme (gleicher Key, gratis – nur ca. 10 Nachrichten pro Tag)</option>
     <option value="azure">🆓 Azure (500'000 Zeichen/Monat gratis)</option>
     <option value="eleven">ElevenLabs (Gratis-Plan – wie bei Moritz Maaker)</option>
     <option value="device">Gerätestimme (offline, gratis)</option></select></div>
+  <div class="field"><label>JARVIS-Stimme (läuft auf dem Handy) <span id="lvNow" class="hint"></span></label><select data-k="lvVoice">
+    <option value="de_DE-thorsten-medium">Thorsten – männlich, natürlich (empfohlen, 63 MB)</option><option value="de_DE-thorsten-high">Thorsten HD – beste Qualität (114 MB, langsamer)</option>
+    <option value="de_DE-karlsson-low">Karlsson – männlich, schnell (63 MB)</option><option value="de_DE-kerstin-low">Kerstin – weiblich (63 MB)</option><option value="de_DE-ramona-low">Ramona – weiblich (63 MB)</option></select></div>
+  <button class="btn" id="lvLoad">🎙️ JARVIS-STIMME LADEN</button>
+  <p class="hint">Einmal laden (ca. 90 MB inkl. Sprach-Engine, am besten im WLAN), danach spricht JARVIS ohne Konto, ohne Limit und ohne Kosten – direkt auf dem Gerät. Im WLAN lädt JARVIS sie automatisch.</p>
   <div class="field"><label>Gemini-Stimme</label><select data-k="gemVoice">
     <option value="Charon">Charon – tief, ruhig, sachlich (JARVIS-Empfehlung)</option><option value="Sadaltager">Sadaltager – kundig, souverän</option>
     <option value="Algieba">Algieba – weich, elegant</option><option value="Orus">Orus – fest, bestimmt</option><option value="Iapetus">Iapetus – klar</option>
@@ -476,7 +482,7 @@ const store = {
   set(k, v){ try{ localStorage.setItem('jarvis.'+k, JSON.stringify(v)); }catch{} }
 };
 const cfg = Object.assign({
-  key:'', gemKey:'', provider:'auto', gemModel:'auto', gemFallbackClaude:false, netMode:'auto', profi:'auto', budgetChf:5, budgetTelChf:3.5, nummerUsd:1.15, voiceEngine:'auto', gemVoice:'Charon', azKey:'', azRegion:'switzerlandnorth', azVoice:'de-DE-ConradNeural', elMax:10000, name:'Sir', model:'claude-opus-5-5', effort:'medium', lang:'de-DE', voice:'', rate:1.05, pitch:0.9,
+  key:'', gemKey:'', provider:'auto', gemModel:'auto', gemFallbackClaude:false, netMode:'auto', profi:'auto', budgetChf:5, budgetTelChf:3.5, nummerUsd:1.15, voiceEngine:'auto', lvVoice:'de_DE-thorsten-medium', gemVoice:'Charon', azKey:'', azRegion:'switzerlandnorth', azVoice:'de-DE-ConradNeural', elMax:10000, name:'Sir', model:'claude-opus-5-5', effort:'medium', lang:'de-DE', voice:'', rate:1.05, pitch:0.9,
   speak:true, wake:false, awake:false, fx:true,
   ntfy:'jarvis-' + Math.random().toString(36).slice(2,10), tg:'', allowCall:false, rules:'', srv:'', srvTok:'', agentTok:'',
   pHumor:2, pSark:1, pForm:'sie', pTalk:'kurz', apiBudget:20,
@@ -2534,7 +2540,7 @@ function fillSettings(){
   document.querySelectorAll('#settings [data-k]').forEach(el => { const v = cfg[el.dataset.k]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v ?? ''; });
   { const e = document.getElementById('sparNow'); if (e){ const si = srvInfo(); e.textContent = cfg.sparmodus ? `Diesen Monat: Claude ${monthCost().toFixed(2)} von ${claudeCap().toFixed(2)} Fr.${cfg.srv ? ` · Telefon ${(si.tel || 0).toFixed(2)} von ${telBudget().toFixed(2)} Fr.` : ''} · Gemini 0 Fr.` : `Diesen Monat: ${monthCost().toFixed(2)} von ${cfg.unbegrenzt ? '∞' : (cfg.apiBudget || 20)} USD (App)`; } }
   { const e = document.getElementById('elNow'); if (e) e.textContent = (elChars[monthKey()] ? `· diesen Monat ${elChars[monthKey()]} Zeichen` : ''); }
-  fillGemNow();
+  fillGemNow(); lvShow();
   { const e = document.getElementById('voiceNow'); if (e){ const u = vUse(); e.textContent = `· spricht gerade: ${VOICE_NAMES[voiceOrder()[0] || 'device']}${u.gemini ? ' · Gemini ' + u.gemini + '×' : ''}${u.azure ? ' · Azure ' + u.azure + ' Z.' : ''}${elChars[monthKey()] ? ' · ElevenLabs ' + elChars[monthKey()] + '/' + (+cfg.elMax || 10000) + ' Z.' : ''} · 0 Fr.`; } }
   $('#cfgKey').value = cfg.key; $('#cfgName').value = cfg.name; $('#cfgModel').value = cfg.model; $('#cfgEffort').value = cfg.effort;
   $('#cfgLang').value = cfg.lang; $('#cfgRate').value = cfg.rate; $('#cfgPitch').value = cfg.pitch;
@@ -2613,7 +2619,27 @@ function elLevel(a){   // real loudness of the voice drives the orb
 const AZ_FREE = 490000;   // Azure F0: 500'000 characters per month free (F0 never bills – it just stops); small margin
 const TTS_STYLE = {trocken:'trocken, mit feinem leisem Humor', ernst:'ernst, ruhig und gefasst', warm:'warm und freundlich', energisch:'energisch und zügig', amüsiert:'leicht amüsiert', begeistert:'begeistert, aber kultiviert', sanft:'sanft und leise'};
 const TTS_FALLBACK = ['gemini-3.8-flash-tts', 'gemini-3.1-flash-tts-preview', 'gemini-2.5-flash-preview-tts'];
-const VOICE_NAMES = {eleven:'ElevenLabs', azure:'Azure', gemini:'Gemini-Stimme', device:'Gerätestimme'};
+const VOICE_NAMES = {eleven:'ElevenLabs', azure:'Azure', lokal:'JARVIS-Stimme', gemini:'Gemini-Stimme', device:'Gerätestimme'};
+// 5.9.2 JARVIS voice ON the device (Piper): free, no account, no limit. Model ~63 MB + engine ~29 MB, loaded once (Wi-Fi: automatically)
+let lvMod = null, lvState = store.get('lvReady', '') === (cfg.lvVoice || 'de_DE-thorsten-medium') ? 'bereit' : 'fehlt', lvPct = 0, lvTried = false;
+const lvImport = () => lvMod ??= import('./vendor/voice-local/voice-local.js').catch(e => { lvMod = null; throw e; });
+function lvShow(){ const e = document.getElementById('lvNow'); if (e) e.textContent = lvState === 'bereit' ? '· ✅ bereit' : lvState === 'lädt' ? `· lädt ${lvPct} %` : lvState === 'fehler' ? '· ⚠️ Laden fehlgeschlagen' : '· noch nicht geladen'; }
+async function lvLoad(manual){
+  if (lvState === 'lädt') return; const voice = cfg.lvVoice || 'de_DE-thorsten-medium';
+  lvState = 'lädt'; lvPct = 0; lvShow(); if (manual) toast('🎙️ Lade die JARVIS-Stimme (einmalig ca. 90 MB) …');
+  try{
+    const V = await lvImport();
+    await V.load(voice, p => { lvPct = Math.min(99, Math.round(p.geladen / p.gesamt * 100)); lvShow(); });
+    await V.warmup(voice); lvState = 'bereit'; store.set('lvReady', voice); voiceDead.delete('lokal'); lvShow();
+    toast('✅ JARVIS-Stimme bereit – spricht ab jetzt gratis und ohne Limit.');
+  }catch(e){ lvState = 'fehler'; lvShow(); if (manual) toast('JARVIS-Stimme: ' + (e.message || e)); }
+}
+function lvAutoLoad(){   // automatically only on a good connection (Wi-Fi / fast, no data saver) – never silently on a slow mobile line
+  if (lvTried || lvState !== 'fehlt' || !cfg.speak || cfg.lvAuto === false) return; const c = navigator.connection || {};
+  if (c.saveData || slowNet() || c.type === 'cellular' || /2g|3g/.test(c.effectiveType || '')) return;
+  lvTried = true; lvLoad(false);
+}
+async function lokalAudio(t, tone){ const V = await lvImport(); return V.synth(t, {voice:cfg.lvVoice || 'de_DE-thorsten-medium', tempo:+cfg.rate * (TONES[tone]?.r || 1)}); }
 let voiceUse = store.get('voiceUse', {});
 function vUse(){ if (voiceUse.month !== monthKey()) voiceUse = {month:monthKey(), azure:0, gemini:0}; return voiceUse; }
 const voiceDead = new Set(), ttsBad = new Set(); let gemTtsPause = 0;
@@ -2622,10 +2648,12 @@ function engineOk(e, len = 0){   // len: the text about to be spoken – a free 
   if (e === 'eleven') return !!(cfg.elKey && cfg.elVoice) && (elChars[monthKey()] || 0) + len <= (+cfg.elMax || 10000);
   if (e === 'azure') return !!(cfg.azKey && /^[a-z0-9]+$/.test(cfg.azRegion || '')) && vUse().azure + len <= AZ_FREE;
   if (e === 'gemini') return !!gemKey() && vUse().geminiAus !== gemDay() && Date.now() > gemTtsPause && !slowNet();
+  if (e === 'lokal') return lvState === 'bereit';
   return !!synth;
 }
 function voiceOrder(len = 0){
-  const all = ['eleven', 'azure', 'gemini', 'device'], pref = cfg.voiceEngine || 'auto';
+  const all = ['eleven', 'azure', 'lokal', 'gemini', 'device'], pref = cfg.voiceEngine || 'auto';
+  if (pref === 'lokal' || pref === 'auto') lvAutoLoad();
   return (all.includes(pref) ? [pref, ...all.filter(e => e !== pref)] : all).filter(e => engineOk(e, len));
 }
 function voiceFail(e, err){
@@ -2665,7 +2693,7 @@ async function gemTtsAudio(t, tone){
   }
   throw Object.assign(new Error('kein Gemini-Sprachmodell frei'), {perDay:true, status:429});
 }
-const cloudAudio = (e, t, tone) => e === 'eleven' ? elevenAudio(t, tone) : e === 'azure' ? azureAudio(t, tone) : gemTtsAudio(t, tone);
+const cloudAudio = (e, t, tone) => e === 'eleven' ? elevenAudio(t, tone) : e === 'azure' ? azureAudio(t, tone) : e === 'lokal' ? lokalAudio(t, tone) : gemTtsAudio(t, tone);
 // Gemini: one request at a time; sentences that arrive meanwhile are bundled → ~2 requests per answer (saves the free quota)
 const gemTtsQ = {pending:[], busy:false};
 function gemTtsQueue(item){ return new Promise((res, rej) => { item.res = res; item.rej = rej; gemTtsQ.pending.push(item); gemTtsPump(); }); }
@@ -2710,8 +2738,8 @@ function speakCloud(t, onStart, tone, engine){
 // settings: hear every available voice with the same sentence
 async function compareVoices(){
   shutUp(); const sample = `Guten Abend, ${cfg.name || 'Sir'}. Alle Systeme laufen einwandfrei – und das Wetter ist, wie gewohnt, eine kleine Enttäuschung.`;
-  for (const e of ['eleven', 'azure', 'gemini', 'device'].filter(x => engineOk(x, sample.length))){
-    toast('🔊 ' + VOICE_NAMES[e] + (e === 'gemini' ? ' · ' + (cfg.gemVoice || 'Charon') : e === 'azure' ? ' · ' + (cfg.azVoice || 'de-DE-ConradNeural') : ''));
+  for (const e of ['eleven', 'azure', 'lokal', 'gemini', 'device'].filter(x => engineOk(x, sample.length))){
+    toast('🔊 ' + VOICE_NAMES[e] + (e === 'lokal' ? ' · ' + String(cfg.lvVoice || 'thorsten').split('-')[1] : e === 'gemini' ? ' · ' + (cfg.gemVoice || 'Charon') : e === 'azure' ? ' · ' + (cfg.azVoice || 'de-DE-ConradNeural') : ''));
     if (e === 'device'){ await speakBrowserP(sample); continue; }
     try{ await playBlob({blob:await cloudAudio(e, sample), items:[{t:sample}]}); }catch(err){ voiceFail(e, err); }
     await new Promise(r => setTimeout(r, 500));
@@ -3179,6 +3207,8 @@ $('#testPush').onclick = async () => { readSettings(); const r = await contactUs
 $('#pHumor').oninput = e => $('#pHumorVal').textContent = ['aus','selten','gelegentlich','oft'][e.target.value];
 $('#pSark').oninput = e => $('#pSarkVal').textContent = ['aus','leicht','spitz','frech'][e.target.value];
 $('#cfgRate').oninput = e => $('#rateVal').textContent = e.target.value + 'x';
+$('#lvLoad').onclick = () => { document.querySelectorAll('#settings [data-k]').forEach(el => { cfg[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value.trim(); }); store.set('cfg', cfg); if (store.get('lvReady', '') !== cfg.lvVoice) lvState = 'fehlt'; lvLoad(true); };
+setTimeout(() => { if (lvState === 'bereit' && cfg.speak) lvImport().then(V => V.warmup(cfg.lvVoice || 'de_DE-thorsten-medium')).catch(() => { lvState = 'fehlt'; store.set('lvReady', ''); }); else if (cfg.speak) lvAutoLoad(); }, 8000);   // keep the first sentence quick
 $('#voiceCompare').onclick = () => { document.querySelectorAll('#settings [data-k]').forEach(el => { cfg[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value.trim(); }); store.set('cfg', cfg); compareVoices(); };
 $('#cfgPitch').oninput = e => $('#pitchVal').textContent = e.target.value;
 $('#cfgLang').onchange = () => { cfg.lang = $('#cfgLang').value; cfg.voice=''; loadVoices(); };

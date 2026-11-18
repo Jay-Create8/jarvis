@@ -1,4 +1,6 @@
-# J.A.R.V.I.S. 5.9.1 🤖
+# J.A.R.V.I.S. 5.9.2 🤖
+
+> **5.9.2:** Neue **JARVIS-Stimme direkt auf dem Handy** – ohne Konto, ohne Kreditkarte, ohne Limit, gratis. Einmal ca. 90 MB laden (im WLAN automatisch, sonst Einstellungen → STIMME → „🎙️ JARVIS-STIMME LADEN“), danach spricht JARVIS damit jede Antwort.
 
 > **5.9.1:** Die Kamera läuft nicht mehr dauernd. Sie geht nur an, wenn ein 3D-Modell offen ist (und Handsteuerung erlaubt ist) oder du „Handsteuerung an“ sagst – nach 1 Minute ohne Hand wieder aus. Fotos („Was siehst du?“) öffnen sie nur kurz.
 

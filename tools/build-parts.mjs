@@ -6,11 +6,11 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PART = 16384, VER = '5.9.1';
+const PART = 16384, VER = '5.9.2';
 const GROUPS = {
   req: ['index.html', 'app.html', 'loader.js', 'js/gemini.js', 'manifest.json', 'icon.svg'],          // needed to start
   def: ['js/hud3d.js', 'js/chunk-OF6KIFO7.js', 'js/windows.js', 'vendor/leaflet.css', 'icon-192.png'],  // loaded right after the start
-  opt: ['anthropic-sdk.mjs', 'js/hands.js', 'js/jv.js', 'js/three.js', 'icon-512.png'],                // only when used
+  opt: ['anthropic-sdk.mjs', 'js/hands.js', 'js/jv.js', 'js/three.js', 'icon-512.png', 'vendor/voice-local/voice-local.js'],                // only when used
 };
 const TYPES = {html:'text/html; charset=utf-8', js:'text/javascript; charset=utf-8', mjs:'text/javascript; charset=utf-8', css:'text/css; charset=utf-8', json:'application/json', svg:'image/svg+xml', png:'image/png'};
 mkdirSync(join(ROOT, 'p'), {recursive:true});
