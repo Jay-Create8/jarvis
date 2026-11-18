@@ -1,4 +1,19 @@
-# J.A.R.V.I.S. 5.7.2 🤖
+# J.A.R.V.I.S. 5.8 🤖
+
+> **Neu in 5.8: gratis denken, gratis sprechen.**
+> 1. **🆓 Gratis-Gehirn (Gemini):** https://aistudio.google.com/apikey → „API-Schlüssel erstellen“ → kopieren → in JARVIS
+>    Einstellungen → **📋 KEY EINFÜGEN**. JARVIS erkennt den Key, prüft ihn bei Google und denkt ab sofort gratis.
+>    Im Google-Projekt **keine Abrechnung aktivieren** – dann kann es nichts kosten. Tageskontingent leer → ehrliche Meldung,
+>    um ca. 9 Uhr geht's weiter (Claude nur, wenn du „Bei Gemini-Limit Claude nutzen“ einschaltest).
+> 2. **🗣 Gratis-Stimmen:** Automatisch die beste, die gerade gratis geht: ElevenLabs (Gratis-Plan, wie bei Moritz Maaker) →
+>    Azure (500'000 Zeichen gratis) → **Gemini-Stimme** (gleicher Key, KI-Butler-Stimme „Charon“) → Gerätestimme.
+>    JARVIS bleibt immer im Gratis-Rahmen. Einstellungen → STIMME → **🔊 STIMMEN VERGLEICHEN** zum Anhören.
+> 3. **Start-Lader:** JARVIS lädt in kleinen Häppchen; bricht das Netz ab, geht es dort weiter. Zum Starten nur noch 111 KB,
+>    3D und Fenster kommen danach. Updates laden nur, was sich geändert hat.
+> 4. **Wichtige Korrektur:** Drei Werkzeugnamen mit Umlauten hätten mit Claude jede Anfrage scheitern lassen – behoben.
+> Prüfbericht: **STATUS-5.8.md**
+
+## Version 5.7.2
 
 > **5.7.2:** Für langsames Netz: Nach dem ersten Laden startet JARVIS in ca. 3 s direkt vom Handy (auch offline), statt jedes Mal über das Netz zu laden. Beim ersten Mal zeigt er, dass er lädt.
 

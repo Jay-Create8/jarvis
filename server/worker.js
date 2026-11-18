@@ -119,7 +119,7 @@ export async function startThirdCall(env, origin, { nummer, name = '', ziel = ''
   if (r.ok) { const log = await kvGet(env, 'thirdlog', []); log.push({ t: Date.now(), n: num }); await kvPut(env, 'thirdlog', log.slice(-200)); }
   return r.ok ? { ok: true, id, nummer: num, status: j.status, hinweis: 'Twilio wählt. Das Gesprächsergebnis kommt in den Posteingang.' } : { ok: false, grund: j.message || 'HTTP ' + r.status };
 }
-const THIRD_TOOLS = [{ name: 'gespräch_beenden', description: 'Beendet das Telefonat, wenn das Ziel erreicht ist, klar nicht erreichbar ist oder das Gegenüber auflegen will.', input_schema: { type: 'object', properties: { erfolg: { type: 'boolean' }, abweichung: { type: 'boolean', description: 'true, wenn du eine Alternative statt des ursprünglichen Wunsches vereinbart hast' }, ergebnis: { type: 'string', description: 'Was genau vereinbart/erfahren wurde (Datum, Uhrzeit, Name, Bedingungen) oder warum nicht' }, abschied: { type: 'string' } }, required: ['erfolg', 'abweichung', 'ergebnis', 'abschied'], additionalProperties: false } }];
+const THIRD_TOOLS = [{ name: 'gespraech_beenden', description: 'Beendet das Telefonat, wenn das Ziel erreicht ist, klar nicht erreichbar ist oder das Gegenüber auflegen will.', input_schema: { type: 'object', properties: { erfolg: { type: 'boolean' }, abweichung: { type: 'boolean', description: 'true, wenn du eine Alternative statt des ursprünglichen Wunsches vereinbart hast' }, ergebnis: { type: 'string', description: 'Was genau vereinbart/erfahren wurde (Datum, Uhrzeit, Name, Bedingungen) oder warum nicht' }, abschied: { type: 'string' } }, required: ['erfolg', 'abweichung', 'ergebnis', 'abschied'], additionalProperties: false } }];
 export async function thirdTurn(env, call, heard) {
   call.verlauf.push({ role: 'user', content: heard || '(nichts verstanden)' });
   const sys = `Du bist J.A.R.V.I.S., ein KI-Telefonassistent, und rufst im Auftrag von ${call.nutzer} bei ${call.name || 'dieser Nummer'} an.
@@ -132,13 +132,13 @@ REGELN:
 SPIELRAUM FÜR ALTERNATIVEN: ${call.spielraum || 'keiner – nur genau wie im Auftrag'}
 FREIE ZEITEN IM KALENDER VON ${call.nutzer}: ${call.frei || 'unbekannt'}
 - Geht der Wunsch nicht: Denk mit. Liegt eine angebotene oder von dir erfragte Alternative im SPIELRAUM (und in den freien Zeiten, falls bekannt), sag sie selbst zu und beende mit erfolg=true, abweichung=true – ${call.nutzer} wird danach informiert und kann es ändern. Frag ruhig aktiv nach der nächstbesten Möglichkeit.
-- Ausserhalb des Spielraums oder wenn Kosten, Anzahlung, Kreditkarte oder ein Vertrag nötig wären: NICHT zusagen, sondern sagen, dass du es mit ${call.nutzer} klärst und dich meldest – dann gespräch_beenden mit erfolg=false und den Details.
+- Ausserhalb des Spielraums oder wenn Kosten, Anzahlung, Kreditkarte oder ein Vertrag nötig wären: NICHT zusagen, sondern sagen, dass du es mit ${call.nutzer} klärst und dich meldest – dann gespraech_beenden mit erfolg=false und den Details.
 - Keine Zahlungs-, Ausweis- oder Kontodaten, nichts ausser „DARFST DU SAGEN“. Nichts erfinden.
-- Ist alles geklärt oder will das Gegenüber auflegen: gespräch_beenden mit dem genauen Ergebnis (bei Erfolg: was genau vereinbart wurde und auf welchen Namen).`;
+- Ist alles geklärt oder will das Gegenüber auflegen: gespraech_beenden mit dem genauen Ergebnis (bei Erfolg: was genau vereinbart wurde und auf welchen Namen).`;
   const r = await client(env).messages.create({ model: MODEL_CALL, max_tokens: 500, system: sys, messages: call.verlauf.map((m) => ({ role: m.role, content: m.content })), tools: THIRD_TOOLS, output_config: { effort: 'low' } });
   await addCost(env, MODEL_CALL, r.usage);
   let text = r.content.filter((b) => b.type === 'text').map((b) => b.text).join(' ').trim();
-  const end = r.content.find((b) => b.type === 'tool_use' && b.name === 'gespräch_beenden');
+  const end = r.content.find((b) => b.type === 'tool_use' && b.name === 'gespraech_beenden');
   if (call.verlauf.length === 1 && !/\bKI\b|künstliche intelligenz|assistent/i.test(text)) text = `Guten Tag, hier spricht JARVIS, ein KI-Assistent, keine echte Person, im Auftrag von ${call.nutzer}. ` + text;   // disclosure is enforced, not left to the model
   call.verlauf.push({ role: 'assistant', content: text || end?.input.abschied || 'Einen Moment.' });
   const forced = !end && call.verlauf.length >= 24;   // ~12 exchanges max

@@ -133,7 +133,7 @@ try {
 step(7, 'JARVIS-App als Website veröffentlichen');
 st.pagesName ||= 'jarvis-' + crypto.randomBytes(3).toString('hex'); save();
 const APPDIR = path.join(HERE, '.app-upload'); fs.rmSync(APPDIR, { recursive: true, force: true }); fs.mkdirSync(APPDIR);
-for (const f of ['index.html', 'manifest.json', 'sw.js', 'icon.svg', 'icon-192.png', 'icon-512.png', 'anthropic-sdk.mjs', 'js', 'lib', 'assets', 'vendor'])
+for (const f of ['index.html', 'app.html', 'loader.js', 'precache.json', 'p', 'manifest.json', 'sw.js', 'icon.svg', 'icon-192.png', 'icon-512.png', 'anthropic-sdk.mjs', 'js', 'lib', 'assets', 'vendor'])   // 5.8: start page + app + resumable parts
   if (fs.existsSync(path.join(ROOT, f))) fs.cpSync(path.join(ROOT, f), path.join(APPDIR, f), { recursive: true });
 run(['pages', 'project', 'create', st.pagesName, '--production-branch', 'main'], { cwd: HERE });   // fails harmlessly if it exists
 const p = run(['pages', 'deploy', APPDIR, '--project-name', st.pagesName, '--branch', 'main', '--commit-dirty=true'], { cwd: HERE });
@@ -153,7 +153,7 @@ fs.writeFileSync(startFile, isWin
 ok('PC-Agent-Startdatei: ' + path.relative(ROOT, startFile) + ' (Doppelklick → JARVIS kann diesen Laptop auch vom Handy aus bedienen)');
 try { const q = (await import('qrcode-terminal')).default; console.log('\n  Am Handy mit der Kamera scannen (öffnet JARVIS bereits verbunden):\n'); q.generate(link, { small: true }); }
 catch { console.log('\n  Diesen Link am Handy öffnen (z.B. per Mail an dich selbst schicken):\n  ' + link); }
-console.log(`\n  Danach in JARVIS: Einstellungen → Anthropic-Key eintragen (bleibt nur auf dem Handy) → „API-Key mit PIN schützen“.\n  Push: ntfy-App installieren und das Thema ${c.b(st.ntfy || '(bestehendes)')} abonnieren.`);
+console.log(`\n  Danach in JARVIS: Einstellungen → KEY EINFÜGEN – gratis: Gemini-Key von aistudio.google.com/apikey (oder Anthropic-Key, kostet). Der Key bleibt nur auf dem Handy.\n  Push: ntfy-App installieren und das Thema ${c.b(st.ntfy || '(bestehendes)')} abonnieren.`);
 if (await yes('Zugangsdaten zusätzlich in JARVIS-Zugang.txt auf diesem Rechner speichern (Backup)?', 'n'))
   fs.writeFileSync(path.join(HERE, 'JARVIS-Zugang.txt'), `JARVIS-Zugang (geheim halten!)\nApp: ${appUrl}\nServer: ${url}\nServer-Token (App): ${appTok}\nAgent-Token (Laptop): ${agentTok}\nPush-Thema (ntfy): ${st.ntfy}\nEinrichtungs-Link: ${link}\n`, { mode: 0o600 });
 console.log(c.g('\n✅ Fertig. ') + 'Nochmal ausführen ist jederzeit möglich (z.B. nach einem Update – dann wird nur neu hochgeladen).\n');

@@ -1,8 +1,9 @@
 # JARVIS einrichten – Schritt für Schritt (ca. 20 Minuten)
 
-> **Nur die App (ohne Telefon/Laptop-Fernsteuerung) – 2 Minuten:** https://jay-create8.github.io/jarvis/ in Chrome öffnen →
-> ⋮ → „App installieren“ (oder APK: https://jay-create8.github.io/jarvis/JARVIS.apk) → Einstellungen → SCHNELLSTART:
-> **📋 KEY EINFÜGEN** → **🚀 ALLES FREISCHALTEN**. Fertig. Sparmodus ist an: max. 2 Fr. im Monat.
+> **Nur die App (ohne Telefon/Laptop-Fernsteuerung) – 2 Minuten, gratis:** https://jay-create8.github.io/jarvis/ in Chrome öffnen →
+> ⋮ → „App installieren“ (oder APK: https://jay-create8.github.io/jarvis/JARVIS.apk) → Gemini-Key holen auf
+> https://aistudio.google.com/apikey („API-Schlüssel erstellen“, kopieren) → in JARVIS Einstellungen → SCHNELLSTART:
+> **📋 KEY EINFÜGEN** → **🚀 ALLES FREISCHALTEN**. Fertig – denkt und spricht gratis. (Anthropic-Key geht weiterhin, kostet aber.)
 > Der Rest dieser Anleitung ist nur für Server, Telefon und Laptop.
 
 Alles, was automatisch geht, macht der **Einrichtungs-Assistent**. Du machst nur das, wofür man **dein Konto, deine Zahlungsdaten
@@ -10,7 +11,7 @@ oder dein Gerät** braucht – das darf und kann niemand sonst für dich.
 
 ## A. Am Laptop (einmal)
 1. **Node.js** installieren: nodejs.org → „LTS“ → installieren.
-2. Den Ordner `jarvis-5.7` aus `JARVIS-5.7-Laptop.zip` entpacken.
+2. Den Ordner `jarvis-5.8` aus `JARVIS-5.8-Laptop.zip` entpacken.
 3. Im Ordner `einrichten` doppelklicken:
    - Windows: **`JARVIS-einrichten.cmd`**
    - Mac: **`JARVIS-einrichten.command`** (beim ersten Mal: Rechtsklick → Öffnen)
