@@ -27,7 +27,8 @@ Quelle Anrufpreise: https://www.twilio.com/en-us/voice/pricing/ch
    npm install
    npx wrangler login
    npx wrangler kv namespace create JARVIS_KV      → ID in wrangler.toml eintragen
-   npx wrangler secret put ANTHROPIC_API_KEY
+   npx wrangler secret put GEMINI_API_KEY          → gratis (aistudio.google.com/apikey) – Server denkt kostenlos
+   npx wrangler secret put ANTHROPIC_API_KEY       → nur ohne Gemini-Key nötig (kostet)
    npx wrangler secret put JARVIS_TOKEN            → ein langes zufälliges Passwort
    npx wrangler secret put TWILIO_SID
    npx wrangler secret put TWILIO_TOKEN

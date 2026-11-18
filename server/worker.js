@@ -3,11 +3,13 @@
    - Echte Telefonanrufe über Twilio, mit Sprachdialog (Twilio <Gather speech> ↔ Claude)
    - Posteingang: Ergebnisse/Aufgaben aus Anrufen und Wächtern → JARVIS-App setzt sie fort
    - Wächter laufen per Cron alle 15 Minuten – auch wenn die App geschlossen ist
-   Secrets (wrangler secret put …): ANTHROPIC_API_KEY, JARVIS_TOKEN, TWILIO_SID, TWILIO_TOKEN,
-   TWILIO_FROM (+1…), USER_PHONE (+41…), optional NTFY_TOPIC. KV-Binding: JARVIS_KV.
-   Nichts kostet etwas, solange keine Twilio-Daten eingetragen sind.
+   Secrets (wrangler secret put …): GEMINI_API_KEY (gratis, 5.9) und/oder ANTHROPIC_API_KEY, JARVIS_TOKEN,
+   TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM, USER_PHONE (+41…), optional NTFY_TOPIC. KV-Binding: JARVIS_KV.
+   5.9: Mit GEMINI_API_KEY denkt der Server gratis (Wächter, Telefon-Gespräche, Routinen). Telefon kostet nur mit Twilio –
+   und nie mehr als das Telefon-Budget aus der App (policy.budgetTel, inkl. Nummernpreis).
    ===================================================================== */
 import Anthropic from '@anthropic-ai/sdk';
+import * as G from '../js/gemini.js';
 
 const MODEL_CALL = 'claude-haiku-5-5';    // fast replies on the phone
 const MODEL_WATCH = 'claude-opus-5-5';    // careful background checks
@@ -18,6 +20,37 @@ const VOICE = 'Google.de-DE-Neural2-B';
 const say = (t) => `<Say language="de-DE" voice="${VOICE}">${escX(t)}</Say>`;
 
 const client = (env) => new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, fetch: (...a) => globalThis.fetch(...a) });
+
+/* ---------- 5.9: one AI entry point – Gemini (free) when its key is set, otherwise Claude (paid, tracked) ---------- */
+const GEM_DEFAULT = 'gemini-3.5-flash-lite';
+const useGemini = (env) => !!env.GEMINI_API_KEY;
+let gemCache = null;
+export async function gemModel(env) {
+  if (env.GEMINI_MODEL) return env.GEMINI_MODEL;
+  if (gemCache && Date.now() - gemCache.at < 864e5) return gemCache.lite;
+  const c = await kvGet(env, 'gemModels', null);
+  if (c && Date.now() - c.at < 7 * 864e5) { gemCache = c; return c.lite; }
+  try { const m = await G.gemModels(env.GEMINI_API_KEY); gemCache = { lite: m.lite || GEM_DEFAULT, flash: m.flash, at: Date.now() }; await kvPut(env, 'gemModels', gemCache); return gemCache.lite; }   // one write per week
+  catch { return GEM_DEFAULT; }
+}
+// messages/tools in Claude format; returns {content, stop_reason, parts?}
+async function llm(env, { system, messages, tools = [], maxTokens = 600, claudeModel = 'claude-haiku-5-5', raw, ids, tries = 4 }) {
+  if (useGemini(env)) {
+    const model = await gemModel(env);
+    return G.gemStream({ key: env.GEMINI_API_KEY, model, system, history: messages, tools, maxTokens, raw, ids, stream: false, tries }).finalMessage();
+  }
+  const r = await client(env).messages.create({ model: claudeModel, max_tokens: maxTokens, system, messages, tools, output_config: { effort: 'low' } });
+  await addCost(env, claudeModel, r.usage); return r;
+}
+
+/* ---------- 5.9: phone money – real Twilio prices for Switzerland (Aug 2026: landline 0.0419, mobile 0.18–0.25 $/min, billed per started minute) ---------- */
+const telKey = () => 'telkosten:' + new Date().toISOString().slice(0, 7);
+export function telRate(num) { if (/^\+417[5-9]/.test(num)) return 0.26; if (/^\+41/.test(num)) return 0.05; return 0.30; }   // rounded up – never under-estimate
+export async function telCheck(env, num, maxMin) {
+  const p = await kvGet(env, 'policy', {}); const budget = p.budgetTel ?? p.budget ?? 3.5, fee = p.nummerUsd ?? 1.15;   // budget = older apps
+  const spent = await kvGet(env, telKey(), 0), est = fee + spent + maxMin * telRate(num) + 0.01;
+  return est > budget ? `Telefon-Budget dieses Monats (${budget.toFixed(2)} $) würde überschritten – bisher ${(fee + spent).toFixed(2)} $ inkl. Nummer, dieser Anruf bis zu ${(maxMin * telRate(num)).toFixed(2)} $` : null;
+}
 
 /* ---------- 5.7: own AI cost tracking (USD per month) – Sparmodus caps the server at policy.kiBudgetServer ---------- */
 const PRICE = { 'claude-haiku-5-5': [0.10, 0.50, 0.01, 0.125], 'claude-sonnet-5-5': [2, 10, 0.10, 2.5], 'claude-opus-5-5': [4, 20, 0.20, 5] };
@@ -51,11 +84,11 @@ export async function policyCheck(env, dringlichkeit = 'normal', now = new Date(
   const parts = new Intl.DateTimeFormat('de-CH', { timeZone: p.tz || 'Europe/Zurich', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now).split(':').map(Number);
   const hm = parts[0] * 60 + parts[1], toM = (t) => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
   const a = toM(p.quietFrom), b = toM(p.quietTo); const quiet = a === b ? false : a < b ? hm >= a && hm < b : hm >= a || hm < b;
-  if (p.unbegrenzt) return log.filter((t) => now - t < 864e5).length >= 30 ? 'Notbremse: 30 Anrufe in 24 h (Schutz vor Endlosschleifen)' : null;   // 5.6: user chose no limits
+  const money = await telCheck(env, env.USER_PHONE || '+41790000000', 3);   // 5.9: the money cap holds even with "no limits"
+  if (p.unbegrenzt) return log.filter((t) => now - t < 864e5).length >= 30 ? 'Notbremse: 30 Anrufe in 24 h (Schutz vor Endlosschleifen)' : money;   // 5.6: user chose no limits
   if (quiet && dringlichkeit !== 'notfall') return `Ruhezeit ${p.quietFrom}–${p.quietTo}`;
   const today = log.filter((t) => now - t < 864e5).length; if (today >= (p.maxCalls ?? 3)) return `Tageslimit erreicht (${today}/${p.maxCalls})`;
-  const est = 1.15 + (log.length + 1) * 2 * 0.18; if (est > (p.budget ?? 10)) return `Monatsbudget ${p.budget} USD würde überschritten (geschätzt ${est.toFixed(2)} USD)`;
-  return null;
+  return money;
 }
 
 /* ---------- outbound phone call (real PSTN call via Twilio) ---------- */
@@ -65,7 +98,7 @@ export async function startCall(env, origin, { anlass, nachricht, dringlichkeit 
   if (!env.TWILIO_SID || !env.TWILIO_TOKEN || !env.TWILIO_FROM || !env.USER_PHONE) return { ok: false, art: 'telefonanruf', grund: 'Twilio ist nicht eingerichtet (keine Kosten).' };
   const id = crypto.randomUUID();
   await kvPut(env, 'call:' + id, { anlass, nachricht, verlauf: [], start: Date.now() }, 3600);
-  const body = new URLSearchParams({ To: env.USER_PHONE, From: env.TWILIO_FROM, Url: `${origin}/twiml/start?c=${id}`, StatusCallback: `${origin}/twiml/status?c=${id}`, StatusCallbackEvent: 'answered completed', MachineDetection: 'Enable' });
+  const body = new URLSearchParams({ To: env.USER_PHONE, From: env.TWILIO_FROM, Url: `${origin}/twiml/start?c=${id}`, StatusCallback: `${origin}/twiml/status?c=${id}`, StatusCallbackEvent: 'answered completed', MachineDetection: 'Enable', TimeLimit: '180' });
   const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_SID}/Calls.json`, { method: 'POST', body, headers: { authorization: 'Basic ' + btoa(env.TWILIO_SID + ':' + env.TWILIO_TOKEN), 'content-type': 'application/x-www-form-urlencoded' } });
   const j = await r.json().catch(() => ({}));
   if (r.ok) { const log = await kvGet(env, 'calllog', []); log.push(Date.now()); await kvPut(env, 'calllog', log.slice(-200)); }
@@ -96,13 +129,11 @@ export async function thirdCallCheck(env, nummer, now = new Date()) {
   if (p.unbegrenzt) {   // 5.6: no user limits, only brakes against loops/harassment
     if (log.length >= 50) return 'Notbremse: 50 Anrufe an Dritte in 24 h (Schutz vor Endlosschleifen)';
     if (log.filter((x) => x.n === nummer).length >= 6) return 'Notbremse: diese Nummer heute schon 6× angerufen';
-    return null;
+    return telCheck(env, nummer, 5);
   }
   if (log.length >= (p.maxDritte ?? 5)) return `Tageslimit für Anrufe an Dritte erreicht (${log.length}/${p.maxDritte ?? 5})`;
   if (log.filter((x) => x.n === nummer).length >= 2) return 'Diese Nummer wurde heute schon zweimal angerufen';
-  const all = (await kvGet(env, 'calllog', [])).filter((t) => now - t < 30 * 864e5).length + (await kvGet(env, 'thirdlog', [])).filter((x) => now - x.t < 30 * 864e5).length;
-  const est = 1.15 + (all + 1) * 5 * 0.18; if (est > (p.budget ?? 10)) return `Monatsbudget ${p.budget} USD würde überschritten (geschätzt ${est.toFixed(2)} USD)`;
-  return null;
+  return telCheck(env, nummer, 5);   // 5.9: real prices, real minutes
 }
 export async function startThirdCall(env, origin, { nummer, name = '', ziel = '', darf_sagen = '', spielraum = '', frei = '' }) {
   const p = await kvGet(env, 'policy', {});
@@ -135,8 +166,7 @@ FREIE ZEITEN IM KALENDER VON ${call.nutzer}: ${call.frei || 'unbekannt'}
 - Ausserhalb des Spielraums oder wenn Kosten, Anzahlung, Kreditkarte oder ein Vertrag nötig wären: NICHT zusagen, sondern sagen, dass du es mit ${call.nutzer} klärst und dich meldest – dann gespraech_beenden mit erfolg=false und den Details.
 - Keine Zahlungs-, Ausweis- oder Kontodaten, nichts ausser „DARFST DU SAGEN“. Nichts erfinden.
 - Ist alles geklärt oder will das Gegenüber auflegen: gespraech_beenden mit dem genauen Ergebnis (bei Erfolg: was genau vereinbart wurde und auf welchen Namen).`;
-  const r = await client(env).messages.create({ model: MODEL_CALL, max_tokens: 500, system: sys, messages: call.verlauf.map((m) => ({ role: m.role, content: m.content })), tools: THIRD_TOOLS, output_config: { effort: 'low' } });
-  await addCost(env, MODEL_CALL, r.usage);
+  const r = await llm(env, { system: sys, messages: call.verlauf.map((m) => ({ role: m.role, content: m.content })), tools: THIRD_TOOLS, maxTokens: 500, claudeModel: MODEL_CALL, tries: 2 });   // phone: no long waiting
   let text = r.content.filter((b) => b.type === 'text').map((b) => b.text).join(' ').trim();
   const end = r.content.find((b) => b.type === 'tool_use' && b.name === 'gespraech_beenden');
   if (call.verlauf.length === 1 && !/\bKI\b|künstliche intelligenz|assistent/i.test(text)) text = `Guten Tag, hier spricht JARVIS, ein KI-Assistent, keine echte Person, im Auftrag von ${call.nutzer}. ` + text;   // disclosure is enforced, not left to the model
@@ -155,8 +185,7 @@ export async function callTurn(env, call, heard) {
   const per = (await kvGet(env, 'policy', {})).persona || {};
   const sys = `Du bist J.A.R.V.I.S., der persönliche KI-Assistent von ${per.name || 'deinem Nutzer'}: ruhig, souverän, ehrlich, mit trockenem, subtilem Humor (Stufe ${per.humor ?? 2}/3, Sarkasmus ${per.sarkasmus ?? 1}/3) – aber bei Problemen, Notfällen oder Stress ernst und sachlich. Keine Floskeln. ${per.anrede === 'du' ? 'Du duzt ihn.' : 'Du siezt ihn.'} Du telefonierst gerade mit ihm, weil: ${call.anlass}. Information: ${call.nachricht}. Sprich kurz, natürlich und auf Deutsch (1–2 Sätze, keine Aufzählungen, kein Markdown). Beantworte seine Rückfragen. Kläre die Entscheidung oder Anweisung des Nutzers. Wenn er dir etwas aufträgt, rufe aufgabe_merken auf. Wenn alles geklärt ist, verabschiede dich mit auflegen.`;
   const msgs = call.verlauf.map((m) => ({ role: m.role, content: m.content }));
-  const r = await client(env).messages.create({ model: MODEL_CALL, max_tokens: 600, system: sys, messages: msgs, tools: CALL_TOOLS, output_config: { effort: 'low' } });
-  await addCost(env, MODEL_CALL, r.usage);
+  const r = await llm(env, { system: sys, messages: msgs, tools: CALL_TOOLS, maxTokens: 600, claudeModel: MODEL_CALL, tries: 2 });
   const text = r.content.filter((b) => b.type === 'text').map((b) => b.text).join(' ').trim();
   const tasks = r.content.filter((b) => b.type === 'tool_use' && b.name === 'aufgabe_merken').map((b) => b.input.aufgabe);
   const hang = r.content.find((b) => b.type === 'tool_use' && b.name === 'auflegen');
@@ -167,6 +196,7 @@ export async function callTurn(env, call, heard) {
 
 /* ---------- background watchers (cron) ---------- */
 export async function runWatcher(env, w) {
+  if (useGemini(env)) return runWatcherGem(env, w);
   const spar = !!(await kvGet(env, 'policy', {})).sparmodus;
   const model = spar ? 'claude-haiku-5-5' : MODEL_WATCH;   // 5.7 Sparmodus: Haiku (40× cheaper), one web search
   const tools = [spar ? { type: 'web_search_20250305', name: 'web_search', max_uses: 1 } : { type: 'web_search_20260209', name: 'web_search', max_uses: 3 },
@@ -185,6 +215,67 @@ export async function runWatcher(env, w) {
     msgs.push({ role: 'user', content: r.content.filter((b) => b.type === 'tool_use').map((b) => ({ type: 'tool_result', tool_use_id: b.id, content: 'Nur bericht ist verfügbar.' })) });
   }
   return { ausgelöst: false, stand: 'keine Auswertung' };
+}
+// 5.9: watcher with the free Gemini brain – Google search as a tool, report via function call
+async function gemSearch(env, query) {
+  const s = await G.gemOnce({ key: env.GEMINI_API_KEY, model: await gemModel(env), search: true, maxTokens: 1200, prompt: `Aktuelle Infos (heute ${new Date().toISOString().slice(0, 10)}): ${query}\nAntworte knapp auf Deutsch mit konkreten Fakten, Zahlen und Datum.` });
+  return { antwort: s.text, quellen: s.sources.slice(0, 5) };
+}
+const WATCH_TOOLS = [
+  { name: 'websuche', description: 'Google-Suche nach aktuellen Infos (Preise, Wetter, News, Spielstände, Verfügbarkeit).', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'bericht', description: 'Abschlussbericht, genau einmal am Ende.', input_schema: { type: 'object', properties: { ausgelöst: { type: 'boolean' }, stand: { type: 'string' }, meldung: { type: 'string' } }, required: ['ausgelöst', 'stand'] } }];
+async function runWatcherGem(env, w) {
+  const msgs = [{ role: 'user', content: `Zeit: ${new Date().toISOString()}\nRegel: "${w.regel}"\nLetzter Stand: ${w.last || '—'}\nPrüfe mit websuche, ob die Regel JETZT ausgelöst ist, und rufe am Ende genau einmal "bericht" auf.` }];
+  const raw = new WeakMap(), ids = {};
+  for (let i = 0; i < 4; i++) {
+    const m = await llm(env, { system: 'Wächter-Modul von J.A.R.V.I.S. Sachlich, nur auslösen wenn wirklich erfüllt.', messages: msgs, tools: WATCH_TOOLS, maxTokens: 2048, raw, ids });
+    if (!m.content.length) break;
+    const a = { role: 'assistant', content: m.content }; msgs.push(a); if (m.parts) raw.set(a, m.parts);
+    const rep = m.content.find((b) => b.type === 'tool_use' && b.name === 'bericht'); if (rep) return rep.input;
+    if (m.stop_reason !== 'tool_use') break;
+    const res = [];
+    for (const u of m.content.filter((b) => b.type === 'tool_use')) {
+      try { res.push({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(u.name === 'websuche' ? await gemSearch(env, u.input?.query || w.regel) : { fehler: 'unbekanntes Werkzeug' }) }); }
+      catch (e) { res.push({ type: 'tool_result', tool_use_id: u.id, is_error: true, content: e.message }); }
+    }
+    msgs.push({ role: 'user', content: res });
+  }
+  return { ausgelöst: false, stand: 'keine Auswertung' };
+}
+
+/* ---------- 5.9: routines – fixed times (and weekdays), run by the server even when the phone is off ---------- */
+const TAGE = ['so', 'mo', 'di', 'mi', 'do', 'fr', 'sa'];
+export async function routinenRun(env, origin, now = new Date()) {
+  const list = await kvGet(env, 'routinen', []); if (!list.length) return [];
+  const pol = await kvGet(env, 'policy', {}); const tz = pol.tz || 'Europe/Zurich';
+  const day = new Intl.DateTimeFormat('sv-SE', { timeZone: tz }).format(now);
+  const wd = TAGE[new Date(day + 'T12:00:00Z').getUTCDay()];
+  const [h, m] = new Intl.DateTimeFormat('de-CH', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now).split(':').map(Number);
+  const out = [];
+  for (const r of list) {
+    if (r.aus || r.zuletzt === day || !/^\d{1,2}:\d{2}$/.test(r.zeit || '')) continue;
+    if (Array.isArray(r.tage) && r.tage.length && !r.tage.includes(wd)) continue;
+    const [rh, rm] = r.zeit.split(':').map(Number); const d = h * 60 + m - (rh * 60 + rm);
+    if (d < 0 || d > 45) continue;                     // cron every 15 min → within 45 min, never hours late
+    r.zuletzt = day; await kvPut(env, 'routinen', list);   // mark first: never twice
+    let text;
+    try { text = await routineAI(env, r, day, tz); } catch (e) { text = 'Routine konnte nicht ausgeführt werden (' + e.message + ').'; }
+    if (env.NTFY_TOPIC) await fetch(`https://ntfy.sh/${env.NTFY_TOPIC}?title=${encodeURIComponent('Routine: ' + r.name)}&priority=${r.kanal === 'wichtig' ? 4 : 3}&tags=repeat`, { method: 'POST', body: text });
+    let anruf = null; if (r.kanal === 'anruf') anruf = await startCall(env, origin, { anlass: 'Routine ' + r.name, nachricht: text.slice(0, 600) });
+    await inboxAdd(env, { typ: 'routine', name: r.name, ergebnis: text, tag: day, anruf: anruf && (anruf.ok ? 'angerufen' : anruf.grund) });
+    out.push({ routine: r.name });
+  }
+  return out;
+}
+async function routineAI(env, r, day, tz) {
+  const b = await kvGet(env, 'briefing', {});
+  const loc = (x) => new Intl.DateTimeFormat('de-CH', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(x));
+  const termine = (b.termine || []).filter((t) => new Intl.DateTimeFormat('sv-SE', { timeZone: tz }).format(new Date(t.start)) === day).map((t) => `${loc(t.start)} ${t.titel}`);
+  const prompt = `Heute ist ${day}. Routine von ${b.anrede || 'deinem Nutzer'} („${r.name}“): ${r.auftrag}\nTermine heute: ${termine.join(', ') || 'keine'}\nErledige das jetzt und antworte als J.A.R.V.I.S. kurz (höchstens 6 Sätze), auf Deutsch, mit konkreten Fakten – ohne Markdown.`;
+  if (useGemini(env)) return (await G.gemOnce({ key: env.GEMINI_API_KEY, model: await gemModel(env), search: true, maxTokens: 1200, prompt })).text || '(keine Antwort)';
+  if (await overBudget(env)) return 'Server-KI-Budget dieses Monats erreicht – Routine übersprungen.';
+  const m = await client(env).messages.create({ model: 'claude-haiku-5-5', max_tokens: 1200, messages: [{ role: 'user', content: prompt }], tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }], output_config: { effort: 'low' } });
+  await addCost(env, 'claude-haiku-5-5', m.usage); return m.content.filter((x) => x.type === 'text').map((x) => x.text).join(' ').trim();
 }
 async function notify(env, origin, w, meldung) {
   const res = {};
@@ -226,11 +317,12 @@ async function briefingRun(env, now = new Date()) {
 export { briefingRun };
 export async function cron(env, origin) {
   const watchers = await kvGet(env, 'watchers', []); const out = []; const pol = await kvGet(env, 'policy', {});
-  const minMin = pol.sparmodus ? 720 : 0;   // Sparmodus: each watcher at most every 12 h
+  const minMin = useGemini(env) ? 60 : pol.sparmodus ? 720 : 0;   // Gemini: free but daily quota → at most hourly; Claude-Sparmodus: every 12 h
   try { const br = await briefingRun(env); if (br) out.push({ briefing: br.art }); } catch (e) { out.push({ briefing_fehler: e.message }); }
+  try { out.push(...await routinenRun(env, origin)); } catch (e) { out.push({ routinen_fehler: e.message }); }
   for (const w of watchers) {
     if (Date.now() - (w.lastRun || 0) < Math.max(w.intervall_min || 30, minMin) * 60e3 - 30e3) continue;
-    if (await overBudget(env)) { w.last = 'Server-KI-Budget dieses Monats erreicht (Sparmodus) – Prüfung pausiert'; out.push({ id: w.id, budget: true }); continue; }
+    if (!useGemini(env) && await overBudget(env)) { w.last = 'Server-KI-Budget dieses Monats erreicht (Sparmodus) – Prüfung pausiert'; out.push({ id: w.id, budget: true }); continue; }
     w.lastRun = Date.now();
     try {
       const r = await runWatcher(env, w); w.last = r.stand;
@@ -254,6 +346,11 @@ export default {
       if (!(await twilioValid(req, env, params))) return new Response('forbidden', { status: 403 });
       const cid = url.searchParams.get('c'); const call = await kvGet(env, 'call:' + cid, null);
       if (!call) return xml(say('Dieser Anruf ist abgelaufen.') + '<Hangup/>');
+      if (url.pathname === '/twiml/status' && params.CallStatus === 'completed' && params.CallDuration && !call.billed) {   // 5.9: count the real minutes
+        call.billed = true; const usd = Math.ceil(+params.CallDuration / 60) * telRate(call.nummer || env.USER_PHONE || '') + 0.01;
+        await kvPut(env, telKey(), (await kvGet(env, telKey(), 0)) + usd); await kvPut(env, 'call:' + cid, call, 3600);
+      }
+      try {
       const gather = (t) => `<Gather input="speech" language="de-CH" speechTimeout="auto" action="${origin}/twiml/turn?c=${cid}" method="POST">${say(t)}</Gather>${say('Ich habe nichts gehört. Ich melde mich in der App. Auf Wiederhören.')}<Hangup/>`;
       if (call.modus === 'dritte' && (url.pathname === '/twiml/start' || url.pathname === '/twiml/turn')) {
         const fin = async (e) => { let rückruf = null; if (e.erfolg && e.abweichung && (await kvGet(env, 'policy', {})).rückruf) { rückruf = await startCall(env, origin, { anlass: 'Rückfrage zu ' + (call.name || call.nummer), nachricht: `Kurze Rückmeldung zu ${call.name || 'deinem Auftrag'}: Dein Wunsch ging nicht, ich habe selbst entschieden. ${e.ergebnis}. Passt das so, oder soll ich es ändern?` }).catch((x) => ({ ok: false, grund: x.message })); if (!rückruf.ok && env.NTFY_TOPIC) await fetch(`https://ntfy.sh/${env.NTFY_TOPIC}?title=${encodeURIComponent('JARVIS hat entschieden')}&priority=4&tags=robot`, { method: 'POST', body: e.ergebnis + ' – passt das? Antworte in der App.' }); }
@@ -275,6 +372,11 @@ export default {
         return xml(gather(t.text || 'Verstanden. Noch etwas?'));
       }
       if (url.pathname === '/twiml/status') { if (call.modus === 'dritte' && !call.done && ['no-answer', 'busy', 'failed', 'canceled', 'completed'].includes(params.CallStatus)) { call.done = true; await kvPut(env, 'call:' + cid, call, 3600); await inboxAdd(env, { typ: 'anruf_dritte', nummer: call.nummer, name: call.name, ziel: call.ziel, erfolg: false, ergebnis: params.CallStatus === 'completed' ? 'Gespräch vorzeitig beendet (aufgelegt)' : 'nicht erreicht: ' + params.CallStatus, verlauf: call.verlauf.map((m) => m.content) }); return new Response('ok'); } if (call.modus === 'dritte') return new Response('ok'); if (params.CallStatus && ['no-answer', 'busy', 'failed', 'canceled'].includes(params.CallStatus)) await inboxAdd(env, { typ: 'anruf', ergebnis: 'nicht erreicht: ' + params.CallStatus, anlass: call.anlass }); return new Response('ok'); }
+      } catch (e) {   // 5.9: AI down or quota used up → polite German goodbye instead of Twilio's English error message
+        await inboxAdd(env, { typ: call.modus === 'dritte' ? 'anruf_dritte' : 'anruf', erfolg: false, nummer: call.nummer, name: call.name, ziel: call.ziel, anlass: call.anlass, ergebnis: 'Gespräch wegen technischer Störung beendet: ' + String(e.message || e).slice(0, 120), verlauf: (call.verlauf || []).map((m) => m.content) });
+        call.done = true; await kvPut(env, 'call:' + cid, call, 3600);
+        return xml(say(call.modus === 'dritte' ? 'Entschuldigung, ich habe gerade eine technische Störung. Wir melden uns später nochmals. Auf Wiederhören.' : 'Entschuldige, ich habe gerade eine technische Störung. Ich melde mich in der App. Bis später.') + '<Hangup/>');
+      }
     }
     // --- 5.2: PC-agent relay, laptop side (own token: the laptop never holds the app token) ---
     if (url.pathname === '/api/agent/abholen' || (url.pathname === '/api/agent/ergebnis' && req.method === 'POST')) {
@@ -292,10 +394,11 @@ export default {
     // --- JARVIS app API (bearer token) ---
     if (url.pathname.startsWith('/api/')) {
       if (!authed(req, env)) return json({ fehler: 'nicht autorisiert' }, 401);
-      if (url.pathname === '/api/status') return json({ ok: true, twilio: !!(env.TWILIO_SID && env.USER_PHONE), ntfy: !!env.NTFY_TOPIC, heartbeat: await kvGet(env, 'heartbeat', null), wächter: (await kvGet(env, 'watchers', [])).length, pc_agent_zuletzt: await kvGet(env, 'agentSeen', null), ki_kosten_monat_usd: await kvGet(env, monthKey(), 0) });
+      if (url.pathname === '/api/status') { const pol = await kvGet(env, 'policy', {}); return json({ ok: true, ki: useGemini(env) ? 'gemini' : env.ANTHROPIC_API_KEY ? 'claude' : null, twilio: !!(env.TWILIO_SID && env.USER_PHONE), ntfy: !!env.NTFY_TOPIC, heartbeat: await kvGet(env, 'heartbeat', null), wächter: (await kvGet(env, 'watchers', [])).length, routinen: (await kvGet(env, 'routinen', [])).length, pc_agent_zuletzt: await kvGet(env, 'agentSeen', null), ki_kosten_monat_usd: await kvGet(env, monthKey(), 0), telefon_kosten_monat_usd: +((env.TWILIO_SID ? (pol.nummerUsd ?? 1.15) : 0) + await kvGet(env, telKey(), 0)).toFixed(2) }); }
       if (url.pathname === '/api/anruf_dritte' && req.method === 'POST') return json(await startThirdCall(env, origin, await req.json()));
       if (url.pathname === '/api/call' && req.method === 'POST') return json(await startCall(env, origin, await req.json()));
-      if (url.pathname === '/api/watchers' && req.method === 'PUT') { const body = await req.json(); const list = body.watchers || []; if (body.policy) await kvPut(env, 'policy', body.policy); if (body.briefing) { const ob = await kvGet(env, 'briefing', {}); await kvPut(env, 'briefing', { ...body.briefing, gesendet: ob.gesendet || {} }); } const old = await kvGet(env, 'watchers', []); await kvPut(env, 'watchers', list.map((w) => ({ ...(old.find((o) => o.id === w.id) || {}), ...w }))); return json({ ok: true, anzahl: list.length }); }
+      if (url.pathname === '/api/watchers' && req.method === 'PUT') { const body = await req.json(); const list = body.watchers || []; if (body.policy) await kvPut(env, 'policy', body.policy);
+        if (Array.isArray(body.routinen)) { const old = await kvGet(env, 'routinen', []); await kvPut(env, 'routinen', body.routinen.slice(0, 30).map((r) => ({ ...r, zuletzt: old.find((o) => o.id === r.id)?.zuletzt }))); } if (body.briefing) { const ob = await kvGet(env, 'briefing', {}); await kvPut(env, 'briefing', { ...body.briefing, gesendet: ob.gesendet || {} }); } const old = await kvGet(env, 'watchers', []); await kvPut(env, 'watchers', list.map((w) => ({ ...(old.find((o) => o.id === w.id) || {}), ...w }))); return json({ ok: true, anzahl: list.length }); }
       if (url.pathname === '/api/inbox' && req.method === 'GET') { const box = await kvGet(env, 'inbox', []); if (box.length) await kvPut(env, 'inbox', []); return json({ einträge: box }); }   // 5.7: no write when empty
       if (url.pathname === '/api/agent/auftrag' && req.method === 'POST') {
         const b = await req.json(); const id = crypto.randomUUID();

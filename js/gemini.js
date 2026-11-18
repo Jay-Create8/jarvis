@@ -164,7 +164,7 @@ async function* sse(res){
 }
 
 // ---------- the agent turn: same surface as the Claude SDK stream (on('streamEvent') + finalMessage()) ----------
-export function gemStream({key, model, system, history, tools, maxTokens = 8192, raw, ids, stream = true, onRetry, signal}){
+export function gemStream({key, model, system, history, tools, maxTokens = 8192, raw, ids, stream = true, onRetry, signal, tries = 4}){
   const handlers = [];
   const emit = ev => { for (const h of handlers) try{ h(ev); }catch(e){ console.warn(e); } };
   const body = {contents:toGeminiContents(history, raw, ids), generationConfig:{maxOutputTokens:maxTokens}};
@@ -173,7 +173,7 @@ export function gemStream({key, model, system, history, tools, maxTokens = 8192,
   const run = (async () => {
     await null;   // let the caller attach handlers first
     const path = `/models/${model}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
-    const {res, bytesUp, bytesRaw} = await gemFetch(path, body, {key, signal, onRetry});
+    const {res, bytesUp, bytesRaw} = await gemFetch(path, body, {key, signal, onRetry, tries});
     const asm = new Assembler(ids, emit);
     if (stream){ for await (const c of sse(res)) asm.push(c); } else asm.push(await res.json());
     const msg = asm.result();
@@ -183,12 +183,12 @@ export function gemStream({key, model, system, history, tools, maxTokens = 8192,
 }
 
 // ---------- one-shot helper (search, page reading, JSON answers, checks) ----------
-export async function gemOnce({key, model, system, prompt, parts, search = false, urls = false, schema = null, maxTokens = 2048, signal, onRetry}){
+export async function gemOnce({key, model, system, prompt, parts, search = false, urls = false, schema = null, maxTokens = 2048, signal, onRetry, tries = 4}){
   const body = {contents:[{role:'user', parts: parts || [{text:prompt}]}], generationConfig:{maxOutputTokens:maxTokens}};
   if (system) body.systemInstruction = {parts:[{text:system}]};
   const tl = []; if (search) tl.push({google_search:{}}); if (urls) tl.push({url_context:{}}); if (tl.length) body.tools = tl;
   if (schema){ body.generationConfig.responseMimeType = 'application/json'; body.generationConfig.responseJsonSchema = cleanSchema(schema); }
-  const {res} = await gemFetch(`/models/${model}:generateContent`, body, {key, signal, onRetry});
+  const {res} = await gemFetch(`/models/${model}:generateContent`, body, {key, signal, onRetry, tries});
   const j = await res.json(); const cand = j.candidates?.[0];
   const text = (cand?.content?.parts || []).filter(p => !p.thought && p.text).map(p => p.text).join('');
   const gm = cand?.groundingMetadata || {};

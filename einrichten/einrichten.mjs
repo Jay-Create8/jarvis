@@ -47,8 +47,8 @@ async function askHidden(q) {
 const yes = async (q, def = 'j') => /^j|^y/i.test(await ask(q + ' (j/n)', def));
 const token = (n = 24) => crypto.randomBytes(n).toString('base64url');
 
-console.log(c.b('\n🤖 JARVIS – Einrichtungs-Assistent\n') + 'Du brauchst: ein Gratis-Konto bei cloudflare.com (wird gleich im Browser geöffnet).\n' +
-  'Optional: Anthropic API-Key (console.anthropic.com) für Wächter/Telefon, Twilio-Konto für echte Anrufe (kostenpflichtig).');
+console.log(c.b('\n🤖 JARVIS – Einrichtungs-Assistent\n') + 'Du brauchst: ein Gratis-Konto bei cloudflare.com (wird gleich im Browser geöffnet) und deinen\n' +
+  'Gemini-Key (gratis, aistudio.google.com/apikey). Optional: Twilio für echte Anrufe (kostet – JARVIS hält dein Budget aus der App ein).');
 
 // 1 – login
 step(1, 'Bei Cloudflare anmelden');
@@ -82,11 +82,17 @@ if (!st.tokensSet || await yes('Neue Zugangs-Tokens erzeugen? (alte Verbindungen
   st.jarvisToken = null; secrets.JARVIS_TOKEN = token(); secrets.AGENT_TOKEN = token(); secrets.NTFY_TOPIC = 'jarvis-' + token(9).toLowerCase().replace(/[^a-z0-9]/g, '');
   st.ntfy = secrets.NTFY_TOPIC;
 }
-console.log('  Anthropic API-Key (für Wächter, Telefon, Briefings vom Server). Bekommst du auf console.anthropic.com → API Keys.');
+console.log('  Gemini-Key (gratis): aistudio.google.com/apikey → „API-Schlüssel erstellen“. Damit denkt der Server kostenlos (Wächter, Routinen, Telefon).');
+const gk = await askHidden('Gemini API-Key'); if (gk) { if (!/^AIza/.test(gk)) warn('Sieht nicht wie ein Gemini-Key aus (beginnt normalerweise mit AIza) – trotzdem gespeichert.'); secrets.GEMINI_API_KEY = gk; }
+console.log('  Optional: Anthropic-Key (kostet) – nur nötig, wenn du keinen Gemini-Key hast. Sonst einfach leer lassen.');
 const ak = await askHidden('Anthropic API-Key'); if (ak) { if (!/^sk-ant-/.test(ak)) warn('Sieht nicht wie ein Anthropic-Key aus (beginnt normalerweise mit sk-ant-) – trotzdem gespeichert.'); secrets.ANTHROPIC_API_KEY = ak; }
-if (await yes('Echte Telefonanrufe über Twilio einrichten? (kostenpflichtig bei Twilio)', 'n')) {
+console.log('  Echte Anrufe kosten bei Twilio: Nummer ab ca. 1.15 $/Monat (eine Schweizer Handynummer kostet 11.70 $ – zu teuer für 5 Fr.),\n' +
+  '  Anruf aufs Festnetz ca. 0.04 $/Min., aufs Handy ca. 0.18–0.25 $/Min. JARVIS stoppt vor deinem Telefon-Budget (Einstellung in der App).');
+if (await yes('Echte Telefonanrufe über Twilio einrichten?', 'n')) {
   secrets.TWILIO_SID = await ask('Twilio Account SID (AC…)'); secrets.TWILIO_TOKEN = await askHidden('Twilio Auth Token');
   secrets.TWILIO_FROM = await ask('Deine Twilio-Nummer (+1… oder +41…)'); secrets.USER_PHONE = await ask('Deine Handynummer (+41…)');
+  const fee = parseFloat(String(await ask('Was kostet diese Nummer pro Monat (in $, steht bei Twilio)?', '1.15')).replace(',', '.'));
+  if (isFinite(fee) && fee >= 0 && fee <= 50) st.nummerUsd = fee;
   for (const k of ['TWILIO_SID', 'TWILIO_TOKEN', 'TWILIO_FROM', 'USER_PHONE']) if (!secrets[k]) delete secrets[k];
 }
 
@@ -143,18 +149,13 @@ const appUrl = `https://${st.pagesName}.pages.dev`; st.appUrl = appUrl; save();
 ok('App: ' + appUrl + c.y('  (die ersten 1–2 Minuten kann die Adresse noch „nicht gefunden“ zeigen)'));
 
 // 8 – connect phone + laptop
-step(8, 'Handy und Laptop verbinden');
-const setup = Buffer.from(JSON.stringify({ srv: url, srvTok: appTok, ntfy: st.ntfy, agentRemote: true })).toString('base64url');
+step(8, 'Handy verbinden');
+const setup = Buffer.from(JSON.stringify({ srv: url, srvTok: appTok, ntfy: st.ntfy, ...(st.nummerUsd != null ? { nummerUsd: st.nummerUsd } : {}) })).toString('base64url');   // 5.9: no laptop remote control
 const link = `${appUrl}/#einrichten=${setup}`;
-const startFile = isWin ? path.join(HERE, 'PC-Agent-starten.cmd') : path.join(HERE, 'pc-agent-starten.sh');
-fs.writeFileSync(startFile, isWin
-  ? `@echo off\r\ncd /d "%~dp0..\\desktop-agent"\r\nif not exist node_modules (call npm install && call npx playwright install chromium)\r\nset JARVIS_SERVER=${url}\r\nset JARVIS_AGENT_SERVER_TOKEN=${agentTok}\r\nnode agent.mjs\r\npause\r\n`
-  : `#!/bin/sh\ncd "$(dirname "$0")/../desktop-agent"\n[ -d node_modules ] || { npm install && npx playwright install chromium; }\nJARVIS_SERVER='${url}' JARVIS_AGENT_SERVER_TOKEN='${agentTok}' exec node agent.mjs\n`, { mode: 0o700 });
-ok('PC-Agent-Startdatei: ' + path.relative(ROOT, startFile) + ' (Doppelklick → JARVIS kann diesen Laptop auch vom Handy aus bedienen)');
 try { const q = (await import('qrcode-terminal')).default; console.log('\n  Am Handy mit der Kamera scannen (öffnet JARVIS bereits verbunden):\n'); q.generate(link, { small: true }); }
 catch { console.log('\n  Diesen Link am Handy öffnen (z.B. per Mail an dich selbst schicken):\n  ' + link); }
 console.log(`\n  Danach in JARVIS: Einstellungen → KEY EINFÜGEN – gratis: Gemini-Key von aistudio.google.com/apikey (oder Anthropic-Key, kostet). Der Key bleibt nur auf dem Handy.\n  Push: ntfy-App installieren und das Thema ${c.b(st.ntfy || '(bestehendes)')} abonnieren.`);
 if (await yes('Zugangsdaten zusätzlich in JARVIS-Zugang.txt auf diesem Rechner speichern (Backup)?', 'n'))
-  fs.writeFileSync(path.join(HERE, 'JARVIS-Zugang.txt'), `JARVIS-Zugang (geheim halten!)\nApp: ${appUrl}\nServer: ${url}\nServer-Token (App): ${appTok}\nAgent-Token (Laptop): ${agentTok}\nPush-Thema (ntfy): ${st.ntfy}\nEinrichtungs-Link: ${link}\n`, { mode: 0o600 });
+  fs.writeFileSync(path.join(HERE, 'JARVIS-Zugang.txt'), `JARVIS-Zugang (geheim halten!)\nApp: ${appUrl}\nServer: ${url}\nServer-Token (App): ${appTok}\nPush-Thema (ntfy): ${st.ntfy}\nEinrichtungs-Link: ${link}\n`, { mode: 0o600 });
 console.log(c.g('\n✅ Fertig. ') + 'Nochmal ausführen ist jederzeit möglich (z.B. nach einem Update – dann wird nur neu hochgeladen).\n');
 rl.close();

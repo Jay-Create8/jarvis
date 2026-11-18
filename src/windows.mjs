@@ -101,6 +101,29 @@ const STYLE = `
 .w-kpi i{font-style:normal;font-size:13px;font-weight:600}.w-kpi i.up{color:#3dffa8}.w-kpi i.down{color:#ff5d6c}
 .w-kpi.hl{border-color:#ffb02e;box-shadow:0 0 18px rgba(255,176,46,.45)}
 .w-items{padding:0 12px 12px}
+.ao-head{padding:10px 12px 4px;font:600 10px Orbitron;letter-spacing:.14em;color:#6f97ad}.ao-head b{color:#fff;font-size:13px}.ao-head span{color:#ffb02e}
+.ao-floor{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;padding:8px 12px 14px;background:repeating-linear-gradient(90deg,transparent 0 46px,rgba(var(--acc-rgb,45,226,255),.035) 46px 47px)}
+.ao-desk{display:flex;gap:10px;align-items:flex-start;border:1px solid rgba(var(--acc-rgb,45,226,255),.2);border-radius:12px;padding:10px;background:linear-gradient(160deg,rgba(var(--acc-rgb,45,226,255),.07),rgba(0,0,0,.25));animation:kpiIn .5s both;position:relative;overflow:hidden}
+.ao-desk::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(var(--acc-rgb,45,226,255),.25)}
+.ao-desk.arbeitet::after{background:linear-gradient(90deg,transparent,var(--cyan,#2de2ff),transparent);background-size:200% 100%;animation:aoScan 1.4s linear infinite}
+@keyframes aoScan{to{background-position:-200% 0}}
+.ao-bot{flex:0 0 46px;height:58px;position:relative}
+.ao-head2{width:30px;height:24px;margin:0 auto;border-radius:9px 9px 7px 7px;background:#0c2232;border:1px solid rgba(var(--acc-rgb,45,226,255),.5);display:flex;justify-content:center;gap:6px;align-items:center}
+.ao-head2 i{width:5px;height:5px;border-radius:50%;background:var(--cyan,#2de2ff);box-shadow:0 0 6px var(--cyan,#2de2ff)}
+.ao-screen{margin-top:5px;height:24px;border-radius:4px;background:#04121c;border:1px solid rgba(var(--acc-rgb,45,226,255),.35);padding:4px;display:flex;flex-direction:column;gap:3px}
+.ao-screen span{height:2px;border-radius:2px;background:rgba(var(--acc-rgb,45,226,255),.35);width:70%}.ao-screen span:nth-child(2){width:45%}.ao-screen span:nth-child(3){width:60%}
+.ao-desk.arbeitet .ao-head2{animation:aoBob .9s ease-in-out infinite}.ao-desk.arbeitet .ao-screen span{background:var(--cyan,#2de2ff);animation:aoType 1.1s steps(4) infinite}
+.ao-desk.arbeitet .ao-screen span:nth-child(2){animation-delay:.3s}.ao-desk.arbeitet .ao-screen span:nth-child(3){animation-delay:.6s}
+@keyframes aoBob{50%{transform:translateY(2px)}}@keyframes aoType{0%{width:10%}100%{width:85%}}
+.ao-desk.wartet .ao-head2 i,.ao-desk.bereit .ao-head2 i{animation:aoBlink 4s infinite}@keyframes aoBlink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+.ao-desk.fehler{border-color:rgba(255,93,108,.6)}.ao-desk.fehler .ao-head2 i{background:#ff5d6c;box-shadow:0 0 6px #ff5d6c}
+.ao-desk.pausiert{opacity:.5}.ao-desk.fertig .ao-head2 i{background:#3dffa8;box-shadow:0 0 6px #3dffa8}
+.ao-desk.hl{border-color:#ffb02e;box-shadow:0 0 18px rgba(255,176,46,.45)}
+.ao-info{min-width:0;flex:1}.ao-name{font:700 12px Orbitron;letter-spacing:.06em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ao-role{font-size:12px;color:#6f97ad;margin-top:1px}.ao-task{font-size:13.5px;color:#cfefff;margin-top:4px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ao-bar{height:4px;border-radius:3px;background:rgba(var(--acc-rgb,45,226,255),.15);margin-top:6px;overflow:hidden}.ao-bar i{display:block;height:100%;background:var(--cyan,#2de2ff);transition:width .6s}
+.ao-foot{display:flex;justify-content:space-between;gap:8px;margin-top:6px;align-items:baseline}.ao-foot em{font:600 9px Orbitron;letter-spacing:.14em;font-style:normal;color:var(--cyan,#2de2ff)}
+.ao-desk.fehler .ao-foot em{color:#ff5d6c}.ao-desk.wartet .ao-foot em,.ao-desk.pausiert .ao-foot em{color:#6f97ad}.ao-desk.fertig .ao-foot em{color:#3dffa8}.ao-foot small{font-size:11.5px;color:#6f97ad;text-align:right}
 .w-item{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid rgba(var(--acc-rgb,45,226,255),.1)}
 .w-item .st{flex:0 0 auto;width:10px;height:10px;border-radius:50%;margin-top:5px;background:var(--cyan,#2de2ff);box-shadow:0 0 8px currentColor}
 .w-item .st.ok{background:#3dffa8}.w-item .st.warn{background:#ffb02e}.w-item .st.err{background:#ff5d6c}
@@ -728,6 +751,36 @@ W.tasks = async (body, data) => {
     info: 'Aufgabenübersicht angezeigt', progress: () => Math.round((steps.filter((s) => s.status === 'done').length / (steps.length || 1)) * 100),
     update(d) { set(d); return 'aktualisiert'; },
     act(a, args = {}) { if (a === 'highlight') { const el = body.querySelector(`.w-step[data-id="${CSS.escape(String(args.ziel))}"]`); el?.classList.add('flash'); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return 'ok'; } throw new Error('Unbekannte Aktion für tasks: ' + a); },
+    destroy() {},
+  };
+};
+
+/* ---------- 5.9 AGENT OFFICE: every helper of JARVIS at its own desk (live) ---------- */
+W.agenten = async (body, data) => {
+  const ST = { arbeitet: 'ARBEITET', bereit: 'BEREIT', wartet: 'WARTET', fehler: 'FEHLER', pausiert: 'PAUSIERT', fertig: 'FERTIG' };
+  let d = data || {};
+  function render() {
+    const list = d.agenten || d.agents || [];
+    const busy = list.filter((a) => a.status === 'arbeitet').length;
+    body.innerHTML = `<div class="ao-head"><b>${list.length}</b> AGENTEN · <b>${busy}</b> ARBEITEN GERADE${d.hinweis ? ` · <span>${esc(d.hinweis)}</span>` : ''}</div><div class="ao-floor">${list.map((a, i) => `
+      <div class="ao-desk ${esc(ST[a.status] ? a.status : 'bereit')}" data-t="${esc(String(a.name || '').toLowerCase())}" style="animation-delay:${i * 0.06}s">
+        <div class="ao-bot"><div class="ao-head2"><i></i><i></i></div><div class="ao-screen"><span></span><span></span><span></span></div></div>
+        <div class="ao-info"><div class="ao-name">${esc(a.symbol || '🤖')} ${esc(a.name || 'Agent')}</div><div class="ao-role">${esc(a.rolle || '')}</div>
+          <div class="ao-task">${esc(a.aufgabe || '')}</div>${a.fortschritt != null ? `<div class="ao-bar"><i style="width:${Math.max(0, Math.min(100, +a.fortschritt || 0))}%"></i></div>` : ''}
+          <div class="ao-foot"><em>${ST[a.status] || 'BEREIT'}</em>${a.naechste ? `<small>${esc(a.naechste)}</small>` : ''}</div></div></div>`).join('') || '<p class="hint" style="padding:14px">Noch keine Agenten – lege Wächter oder Routinen an.</p>'}</div>`;
+  }
+  render();
+  return {
+    info: 'Agenten-Büro angezeigt',
+    update(n) { d = { ...d, ...n }; render(); return 'aktualisiert'; },
+    act(a, args = {}) {
+      if (a === 'highlight' || a === 'fokus') {
+        body.querySelectorAll('.ao-desk.hl').forEach((e) => e.classList.remove('hl'));
+        const el = body.querySelector(`.ao-desk[data-t*="${CSS.escape(String(args.ziel || '').toLowerCase())}"]`);
+        el?.classList.add('hl'); el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return el ? 'hervorgehoben' : 'nicht gefunden';
+      }
+      throw new Error('Unbekannter Befehl: ' + a);
+    },
     destroy() {},
   };
 };

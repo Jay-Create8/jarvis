@@ -298,12 +298,14 @@ body.immersive #chatToggle{display:grid}
     <button class="btn primary" id="unlockAll">🚀 ALLES FREISCHALTEN</button>
     <button class="btn" id="installApp" style="margin-top:8px">📲 ALS APP INSTALLIEREN</button>
     <a class="hint" href="JARVIS.apk" download style="display:inline-block;margin:8px 0 0 8px;color:var(--cyan2)">⬇️ oder APK laden</a>
-    <div class="toggle" style="margin-top:8px"><div>💰 Sparmodus – max. 2 Fr. im Monat<small>Haiku statt Opus (40× günstiger), wenige Websuchen, harter Deckel: App 1.60 USD + Server 0.40 USD ≈ 1.70–1.80 Fr. Telefon über Twilio ist aus (kostet extra) – stattdessen Alarm-Push und Telegram-Anruf gratis. <b id="sparNow"></b></small></div><input type="checkbox" data-k="sparmodus"></div>
+    <div class="toggle" style="margin-top:8px"><div>💰 Kostendeckel pro Monat<small>Gemini (Denken, Stimme, Wächter, Routinen) ist gratis. Geld kosten nur Claude für grosse Aufgaben und echte Telefonate (Twilio) – zusammen nie mehr als der Deckel. Gerechnet 1 $ = 1 Fr. (also eher zu vorsichtig). <b id="sparNow"></b></small></div><input type="checkbox" data-k="sparmodus"></div>
+    <div style="display:flex;gap:8px;margin-top:6px"><div class="field" style="flex:1;margin:0"><label>Deckel gesamt (Fr.)</label><input type="number" min="0" max="100" step="0.5" data-k="budgetChf"></div><div class="field" style="flex:1;margin:0"><label>davon Telefon (Fr.)</label><input type="number" min="0" max="100" step="0.5" data-k="budgetTelChf"></div></div>
     <div id="quickRes" class="hint" style="margin-top:10px"></div>
   </div>
   <div class="field"><label>🆓 Gemini API-Key (gratis, von Google) <span id="gemNow" class="hint"></span></label><input type="password" data-k="gemKey" id="cfgGemKey" placeholder="AIza…" autocomplete="off"></div>
   <p class="hint">Gratis-Kontingent von Google (Free Tier): reicht laut Berichten für einige hundert Nachrichten pro Tag mit Flash-Lite – die genauen Grenzen zeigt Google in AI Studio. <b>Im Google-Projekt keine Abrechnung aktivieren</b>, dann bleibt es sicher gratis. Ist das Tageskontingent aufgebraucht, macht JARVIS um ca. 9 Uhr weiter.</p>
   <div class="field"><label>Welches KI-Gehirn?</label><select data-k="provider"><option value="auto">Automatisch – Gemini (gratis), wenn eingetragen</option><option value="gemini">Immer Gemini (gratis)</option><option value="claude">Immer Claude (kostet, stärker)</option></select></div>
+  <div class="field"><label>🧠 Profi-Modus für grosse Aufgaben</label><select data-k="profi"><option value="auto">Automatisch – Apps, 3D, Analysen, lange Texte: Claude (im Deckel) oder Gemini Flash (gratis)</option><option value="aus">Aus – immer das normale Gehirn</option></select></div>
   <div class="field"><label>Gemini-Modell</label><select data-k="gemModel"><option value="auto">Flash-Lite – meiste Gratis-Anfragen (empfohlen)</option><option value="flash">Flash – klüger, aber nur wenige Gratis-Anfragen pro Tag</option></select></div>
   <div class="field"><label>Netz-Modus</label><select data-k="netMode"><option value="auto">Automatisch – Leicht-Modus bei sehr langsamem Netz (unter 4 KB/s)</option><option value="leicht">Immer Leicht-Modus (kurze Anweisungen, Kernwerkzeuge, keine Fenster)</option><option value="voll">Immer voll (alle Werkzeuge und Fenster)</option></select></div>
   <div class="toggle"><div>Bei Gemini-Limit Claude nutzen<small>Nur wenn auch ein Anthropic-Key da ist. Kostet – der Sparmodus-Deckel gilt weiter. Aus = JARVIS wartet bis zum nächsten Gratis-Kontingent.</small></div><input type="checkbox" data-k="gemFallbackClaude"></div>
@@ -411,6 +413,9 @@ body.immersive #chatToggle{display:grid}
   <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn">DATEIEN<input type="file" id="kFiles" multiple accept=".md,.markdown,.txt,.csv,.json,.html,.htm" hidden></label><label class="btn">ORDNER<input type="file" id="kFolder" webkitdirectory multiple hidden></label><button class="btn" id="kClear">LEEREN</button></div>
   <h3>GELERNTE HÖRFEHLER</h3>
   <div id="fixList"></div>
+  <h3>ROUTINEN</h3>
+  <p class="hint">Feste Zeiten, z.B. „Jeden Werktag um 7:00: Wetter, Termine, Verkehr“. Sag es JARVIS einfach. Mit Server laufen sie auch, wenn das Handy aus ist – kostenlos.</p>
+  <div id="routList"></div>
   <h3>WÄCHTER</h3>
   <p class="hint">Regeln, die JARVIS regelmässig selbst prüft, solange die App offen ist (z.B. „Sag mir, wenn es morgen regnet“).</p>
   <div id="watchList"></div>
@@ -461,7 +466,7 @@ const loadSdk = () => (sdkReady ??= (async () => {
   const m = await import('./anthropic-sdk.mjs'); Anthropic = m.default; return Anthropic;
 })().catch(e => { sdkReady = null; throw e; }));
 // 5.8: 3D core + window system (~290 KB) load AFTER the start, part by part – JARVIS can already chat meanwhile
-const WINDOW_TYPES = ['globe','model3d','map','chart','dashboard','tasks','options','calendar','files','filesorter','research','browserlive','info','custom','scene'];
+const WINDOW_TYPES = ['globe','model3d','map','chart','dashboard','tasks','agenten','options','calendar','files','filesorter','research','browserlive','info','custom','scene'];
 
 /* =========================================================
    STORAGE
@@ -471,7 +476,7 @@ const store = {
   set(k, v){ try{ localStorage.setItem('jarvis.'+k, JSON.stringify(v)); }catch{} }
 };
 const cfg = Object.assign({
-  key:'', gemKey:'', provider:'auto', gemModel:'auto', gemFallbackClaude:false, netMode:'auto', voiceEngine:'auto', gemVoice:'Charon', azKey:'', azRegion:'switzerlandnorth', azVoice:'de-DE-ConradNeural', elMax:10000, name:'Sir', model:'claude-opus-5-5', effort:'medium', lang:'de-DE', voice:'', rate:1.05, pitch:0.9,
+  key:'', gemKey:'', provider:'auto', gemModel:'auto', gemFallbackClaude:false, netMode:'auto', profi:'auto', budgetChf:5, budgetTelChf:3.5, nummerUsd:1.15, voiceEngine:'auto', gemVoice:'Charon', azKey:'', azRegion:'switzerlandnorth', azVoice:'de-DE-ConradNeural', elMax:10000, name:'Sir', model:'claude-opus-5-5', effort:'medium', lang:'de-DE', voice:'', rate:1.05, pitch:0.9,
   speak:true, wake:false, awake:false, fx:true,
   ntfy:'jarvis-' + Math.random().toString(36).slice(2,10), tg:'', allowCall:false, rules:'', srv:'', srvTok:'', agentTok:'',
   pHumor:2, pSark:1, pForm:'sie', pTalk:'kurz', apiBudget:20,
@@ -480,6 +485,7 @@ const cfg = Object.assign({
 store.set('cfg', cfg);
 let calendarEv = store.get('calendar', []); // [{id,titel,start,dauer_min,ort,notiz}]
 let watchers = store.get('watchers', []);
+let routinen = store.get('routinen', []);   // 5.9: fixed-time jobs („jeden Morgen um 7 …“)
 let missions = store.get('missions', []);   // [{id,ziel,schritte:[{title,status,detail}],status,ergebnis,ts}]
 let recentLines = store.get('recentLines', []); // anti-repetition memory of openings/punchlines
 let callLog = store.get('callLog', []);          // timestamps of real phone calls  // [{id,regel,intervall_min,stufe,last,lastAlert}]
@@ -941,7 +947,7 @@ const tools = {
     def:{description:'Ruft eine DRITTE Person oder Firma ECHT an (über den JARVIS-Server/Twilio) und führt das Gespräch selbst als KI-Assistent – z.B. Tisch reservieren, Termin anfragen, Öffnungszeiten oder Verfügbarkeit erfragen. JARVIS sagt am Anfang, dass er eine KI ist. Der Nutzer muss jeden Anruf freigeben. Nummer vorher recherchieren (web_search) oder vom Nutzer. ziel = konkreter Auftrag inkl. erlaubtem Spielraum (z.B. „19 Uhr, 18:30–19:30 ok“); darf_sagen = welche Daten genannt werden dürfen (Name, Personenzahl …). Das Ergebnis kommt nach dem Gespräch automatisch – dann weitermachen (z.B. Kalendereintrag). Ohne Server: open_app phone, der Nutzer ruft selbst.',
       input_schema:S({nummer:{type:'string'}, name:{type:'string', description:'wen du anrufst'}, ziel:{type:'string'}, darf_sagen:{type:'string'}, datum:{type:'string', description:'Tag, um den es geht (YYYY-MM-DD) – damit JARVIS freie Zeiten im Kalender des Nutzers kennt'}, spielraum:{type:'string', description:'Welche Alternativen JARVIS am Telefon selbst annehmen darf, z.B. „18:00–21:00 am selben Tag oder Sonntag gleiche Zeit“. Denk mit: wähle einen sinnvollen Rahmen passend zu Kalender und Anlass.'}}, ['nummer', 'name', 'ziel'])},
     async run({nummer, name, ziel, darf_sagen = '', datum = '', spielraum = ''}){
-      if (cfg.sparmodus) return {nicht_möglich:true, grund:'Sparmodus (max. 2 Fr./Monat) ist an: echte Anrufe über Twilio kosten extra und sind darin aus. Kostenlose Wege: online reservieren/anfragen (Website über pc_browser oder Recherche) oder open_app phone mit fertigem Gesprächstext, damit der Nutzer selbst anruft. Der Nutzer kann den Sparmodus in den Einstellungen ausschalten.'};
+      if (cfg.sparmodus && !telBudget()) return {nicht_möglich:true, grund:'Im Kostendeckel ist kein Telefon-Anteil frei (Einstellungen → „davon Telefon“). Kostenlose Wege: online reservieren/anfragen oder open_app phone mit fertigem Gesprächstext, damit der Nutzer selbst anruft.'};
       if (!cfg.srv || !cfg.srvTok) return {nicht_möglich:true, grund:'Kein JARVIS-Server eingerichtet – echte Anrufe an Dritte gehen nur über den Server (Twilio). Alternative: open_app phone mit der Nummer, der Nutzer ruft selbst.'};
       if (!cfg.allowThird) return {nicht_möglich:true, grund:'Anrufe an Dritte sind in den Einstellungen ausgeschaltet. Der Nutzer kann sie unter TELEFONIE einschalten.'};
       if (cfg.freiheit === 'vorsichtig') spielraum = '';   // careful mode: no own alternatives
@@ -1439,7 +1445,7 @@ async function srv(path, method = 'GET', body){
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.fehler || 'HTTP ' + r.status); return j;
 }
 let lastSyncBody = store.get('lastSyncBody', ''), lastSyncTs = store.get('lastSyncTs', 0);
-async function syncWatchersToServer(){ if (cfg.srv && cfg.srvTok) try{ const body = {briefing:{morgen:cfg.briefMorning, abend:cfg.briefEvening, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, anrede:cfg.name, ort:ctxSnap?.pos || null, termine:calendarEv.filter(e => new Date(e.start) > Date.now() - 864e5 && new Date(e.start) < Date.now() + 8 * 864e5).map(e => ({titel:e.titel, start:e.start}))}, watchers: watchers.map(w => ({id:w.id, regel:w.regel, intervall_min:w.intervall_min, stufe:w.stufe})), policy:{sparmodus:!!cfg.sparmodus, kiBudgetServer:cfg.sparmodus ? SPAR_SERVER_USD : null, unbegrenzt:!!cfg.unbegrenzt, rückruf:!!(cfg.rueckruf && cfg.allowCall), dritteErlaubt:!!cfg.allowThird, maxDritte:+cfg.maxThird || 5, dritteVon:'08:00', dritteBis:'20:00', quietFrom:cfg.quietFrom, quietTo:cfg.quietTo, maxCalls:cfg.maxCalls, budget:cfg.budget, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, persona:{humor:cfg.pHumor, sarkasmus:cfg.pSark, anrede:cfg.pForm, name:cfg.name}}};
+async function syncWatchersToServer(){ if (cfg.srv && cfg.srvTok) try{ const body = {briefing:{morgen:cfg.briefMorning, abend:cfg.briefEvening, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, anrede:cfg.name, ort:ctxSnap?.pos || null, termine:calendarEv.filter(e => new Date(e.start) > Date.now() - 864e5 && new Date(e.start) < Date.now() + 8 * 864e5).map(e => ({titel:e.titel, start:e.start}))}, watchers: watchers.map(w => ({id:w.id, regel:w.regel, intervall_min:w.intervall_min, stufe:w.stufe})), routinen: routinen.map(r => ({id:r.id, name:r.name, zeit:r.zeit, tage:r.tage, auftrag:r.auftrag, kanal:r.kanal, aus:!!r.aus})), policy:{sparmodus:!!cfg.sparmodus, kiBudgetServer:cfg.sparmodus ? SPAR_SERVER_USD : null, budgetTel:cfg.sparmodus ? Math.min(+cfg.budgetTelChf || 0, +cfg.budgetChf || 5) : (+cfg.budget || 10), nummerUsd:+cfg.nummerUsd || 1.15, unbegrenzt:!!cfg.unbegrenzt, rückruf:!!(cfg.rueckruf && cfg.allowCall), dritteErlaubt:!!cfg.allowThird, maxDritte:+cfg.maxThird || 5, dritteVon:'08:00', dritteBis:'20:00', quietFrom:cfg.quietFrom, quietTo:cfg.quietTo, maxCalls:cfg.maxCalls, budget:cfg.budget, tz:Intl.DateTimeFormat().resolvedOptions().timeZone, persona:{humor:cfg.pHumor, sarkasmus:cfg.pSark, anrede:cfg.pForm, name:cfg.name}}};
     const j = JSON.stringify(body); if (j === lastSyncBody && Date.now() - lastSyncTs < 6 * 3600e3) return;   // 5.7: only when changed (Cloudflare free: 1000 writes/day)
     await srv('/api/watchers', 'PUT', body); lastSyncBody = j; lastSyncTs = Date.now(); store.set('lastSyncBody', j); store.set('lastSyncTs', lastSyncTs);
   }catch(e){ console.warn('Wächter-Sync', e.message); } }
@@ -1459,6 +1465,10 @@ async function pollInbox(){
       if (e.typ === 'briefing'){   // 5.2: generated by the server (push already sent) → show + read aloud, no extra AI cost
         briefDone[e.art] = e.tag; store.set('briefDone', briefDone);
         addMsg('ai', md(`${e.art === 'morgen' ? '🌅' : '🌙'} **${e.art === 'morgen' ? 'Morgen' : 'Abend'}-Briefing**\n\n${e.meldung}`)); speakBrowser(e.meldung); continue;   // device voice: free
+      }
+      if (e.typ === 'routine'){   // 5.9: done by the server (push already sent) → show it, no extra AI call
+        const r = routinen.find(x => x.name === e.name); if (r){ r.zuletzt = e.tag; store.set('routinen', routinen); }
+        addMsg('ai', md(`🔁 **Routine „${e.name}“**\n\n${e.ergebnis}`)); continue;
       }
       if (e.typ === 'anruf' && (e.aufgaben || []).length) userTaskUntil = Date.now() + 10 * 60e3;   // what you said on the phone counts as your instruction
       sysLine(`📥 <b>${e.typ === 'anruf' ? 'Nach Telefonat' : 'Wächter (Server)'}</b> · ${esc(e.meldung || e.ergebnis || (e.aufgaben || []).join('; ') || '')}`);
@@ -1561,8 +1571,8 @@ async function contactUser({stufe='hinweis', titel='J.A.R.V.I.S.', nachricht, dr
       res.push = r.ok ? `zugestellt an ntfy (HTTP ${r.status})` : `fehlgeschlagen (HTTP ${r.status})`;
     }catch(e){ res.push = 'fehlgeschlagen: ' + e.message; }
   }
-  if (level === 'anruf' && cfg.sparmodus) res.telefonanruf = 'Sparmodus: kein Twilio-Anruf (kostet extra) – stattdessen Alarm-Push und Telegram-Anruf (gratis).';
-  if (level === 'anruf' && cfg.srv && cfg.srvTok && !cfg.sparmodus){
+  if (level === 'anruf' && cfg.sparmodus && !telBudget()) res.telefonanruf = 'Kein Telefon-Anteil im Kostendeckel – stattdessen Alarm-Push und Telegram-Anruf (gratis).';
+  if (level === 'anruf' && cfg.srv && cfg.srvTok && (!cfg.sparmodus || telBudget())){   // 5.9: the server stops before the phone budget is used up
     try{ const r = await srv('/api/call', 'POST', {anlass: titel, nachricht, dringlichkeit}); if (r.ok){ callLog.push(Date.now()); store.set('callLog', callLog.slice(-100)); } res.telefonanruf = r.ok ? `ECHTER Telefonanruf über Twilio beauftragt (Status ${r.status}). Ergebnis des Gesprächs kommt in den Posteingang.` : 'nicht möglich: ' + r.grund; }
     catch(e){ res.telefonanruf = 'fehlgeschlagen: ' + e.message; }
   }
@@ -1644,6 +1654,39 @@ async function runWatchers(force){
   } finally { watcherBusy = false; }
 }
 setInterval(() => { if (!busy) runWatchers(); }, 60e3);
+// 5.9 routines in the app – only without server (the server runs them even when the phone is off; results come via the inbox)
+const ROUTINE_DAYS = ['so', 'mo', 'di', 'mi', 'do', 'fr', 'sa'];
+function routineDue(r, now = new Date()){
+  if (r.aus || !/^\d{1,2}:\d{2}$/.test(r.zeit || '')) return false;
+  const day = now.toLocaleDateString('sv-SE'); if (r.zuletzt === day) return false;
+  if (r.tage?.length && !r.tage.includes(ROUTINE_DAYS[now.getDay()])) return false;
+  const [h, m] = r.zeit.split(':').map(Number), d = now.getHours() * 60 + now.getMinutes() - (h * 60 + m);
+  return d >= 0 && d <= 120;   // app may open a bit later – catch up within 2 h, never hours late
+}
+function runRoutine(r, manual){
+  if (!manual){ r.zuletzt = new Date().toLocaleDateString('sv-SE'); store.set('routinen', routinen); }
+  const msg = `[Routine „${r.name}“${manual ? ', manuell gestartet' : ', automatisch zur geplanten Zeit'}] ${r.auftrag}\nErledige das jetzt selbstständig und fasse das Ergebnis kurz zusammen.${r.kanal !== 'app' ? ` Schick das Ergebnis zusätzlich mit contact_user (stufe ${r.kanal === 'anruf' ? 'anruf' : 'push'}${r.kanal === 'wichtig' ? ', dringlich' : ''}).` : ''}`;
+  sysLine(`🔁 <b>Routine</b> „${esc(r.name)}“ läuft`);
+  if (busy) eventQueue.push(msg); else handleInput(msg, null, {silent:true});
+}
+// 5.9 agent office – live picture of everything that works for the user
+const DAY_DE = {mo:'Mo', di:'Di', mi:'Mi', do:'Do', fr:'Fr', sa:'Sa', so:'So'};
+function agentOffice(){
+  const brain = provider() === 'gemini' ? `${gemModel()} · gratis` : provider() === 'claude' ? `Claude · im Kostendeckel` : 'kein Key';
+  const list = [{name:'J.A.R.V.I.S.', symbol:'🧠', rolle:'Chef · ' + brain, status: busy ? 'arbeitet' : 'bereit', aufgabe: busy ? (lastUserText || 'denkt nach …').slice(0, 120) : 'wartet auf deinen Auftrag'}];
+  const v = voiceOrder()[0] || 'device';
+  if (cfg.speak) list.push({name:'Sprecher', symbol:'🗣️', rolle:VOICE_NAMES[v] + (v === 'gemini' ? ' · ' + (cfg.gemVoice || 'Charon') : ''), status: ttsQueue ? 'arbeitet' : 'bereit', aufgabe: ttsQueue ? 'spricht gerade' : 'bereit zum Sprechen', naechste:'0 Fr.'});
+  for (const w of watchers) list.push({name:'Wächter', symbol:'👁️', rolle: cfg.srv ? 'auf dem Server' : 'in der App', status: /^Fehler/.test(w.last || '') ? 'fehler' : 'wartet', aufgabe:w.regel, naechste: w.lastRun ? 'nächste Prüfung ' + new Date(w.lastRun + Math.max(w.intervall_min, cfg.srv ? 60 : 5) * 60e3).toLocaleTimeString('de-CH', {hour:'2-digit', minute:'2-digit'}) : 'prüft bald'});
+  for (const r of routinen) list.push({name:r.name, symbol:'🔁', rolle:'Routine · ' + (cfg.srv ? 'Server' : 'App'), status: r.aus ? 'pausiert' : 'wartet', aufgabe:r.auftrag, naechste:`${r.tage?.length ? r.tage.map(t => DAY_DE[t] || t).join(' ') : 'täglich'} ${r.zeit}`});
+  for (const m of missions.filter(m => !['done', 'abgebrochen'].includes(m.status))){ const n = m.schritte.length || 1, d = m.schritte.filter(s => s.status === 'done').length; list.push({name:'Mission', symbol:'🎯', rolle:m.ziel.slice(0, 40), status: m.status === 'error' ? 'fehler' : m.status === 'needs_user' ? 'wartet' : 'arbeitet', aufgabe: m.schritte.find(s => s.status !== 'done')?.title || 'fast fertig', fortschritt: Math.round(d / n * 100)}); }
+  if (cfg.briefMorning || cfg.briefEvening) list.push({name:'Briefing', symbol:'🌅', rolle:'ohne KI · gratis', status:'wartet', aufgabe:'Wetter + Termine', naechste:[cfg.briefMorning, cfg.briefEvening].filter(Boolean).join(' / ')});
+  if (cfg.srv){ const si = srvInfo(); list.push({name:'Telefonist', symbol:'📞', rolle: si.twilio ? 'Twilio · im Budget' : 'Twilio nicht eingerichtet', status: Date.now() < fastInboxUntil ? 'arbeitet' : si.twilio ? 'bereit' : 'pausiert', aufgabe: Date.now() < fastInboxUntil ? 'telefoniert gerade' : (cfg.allowThird ? 'ruft für dich an (Reservierung, Termine)' : 'ruft dich an, wenn es wichtig ist'), naechste: si.twilio ? `${(si.tel || 0).toFixed(2)} von ${telBudget().toFixed(2)} Fr.` : ''});
+    list.push({name:'Server-Wache', symbol:'🛰️', rolle: si.ki === 'gemini' ? 'Gemini · gratis' : 'Claude', status:'bereit', aufgabe:'arbeitet weiter, wenn dein Handy aus ist', naechste: si.at ? 'geprüft ' + new Date(si.at).toLocaleTimeString('de-CH', {hour:'2-digit', minute:'2-digit'}) : ''}); }
+  return {agenten:list, hinweis: cfg.sparmodus ? `Kostendeckel ${+cfg.budgetChf || 5} Fr.` : ''};
+}
+setInterval(() => { if (wmReal && wm.has('agenten')) wm.update('agenten', agentOffice()).catch(() => {}); }, 4000);
+function checkRoutines(){ if (cfg.srv && cfg.srvTok) return; for (const r of routinen) if (routineDue(r)) runRoutine(r); }
+setInterval(checkRoutines, 60e3); setTimeout(checkRoutines, 12000);
 
 function missionWin(m){
   const data = {steps: m.schritte.map((x, i) => ({id:String(i + 1), title:x.title, status:x.status, detail:x.detail})), status: m.status === 'done' ? 'ABGESCHLOSSEN' : m.status === 'needs_user' ? 'WARTET AUF DICH' : m.status === 'error' ? 'PROBLEM' : 'LÄUFT'};
@@ -1844,6 +1887,33 @@ Alle: daten.status (Badge), daten.progress (0–100).`,
       input_schema:S({stufe:{type:'string', enum:['hinweis','push','anruf']}, titel:{type:'string'}, nachricht:{type:'string'}, dringlichkeit:{type:'string', enum:['normal','hoch','notfall']}}, ['stufe','nachricht'])},
     async run(i){ return await contactUser(i); }
   },
+  agenten_buero: {
+    label:'AGENTEN-BÜRO',
+    def:{description:'Zeigt das Agenten-Büro: alle Helfer von JARVIS live an ihren Schreibtischen (Gehirn, Wächter, Routinen, Missionen, Telefon, Briefing, Stimme, Server) mit Status, Aufgabe und nächstem Termin. Aktualisiert sich selbst.', input_schema:S({fokus:{type:'string', description:'Name eines Agenten, der hervorgehoben werden soll (optional)'}})},
+    async run({fokus}){
+      const data = agentOffice();
+      await (wm.has('agenten') ? wm.update('agenten', data) : wm.open({id:'agenten', type:'agenten', title:'AGENTEN-BÜRO', size:'m', data}));
+      if (fokus) await wm.act('agenten', 'highlight', {ziel:fokus}).catch(() => {});
+      return {agenten: data.agenten.map(a => `${a.name} (${a.rolle}): ${a.status} – ${a.aufgabe}${a.naechste ? ' · ' + a.naechste : ''}`)};
+    }
+  },
+  routinen: {
+    label:'ROUTINEN',
+    def:{description:'Feste Routinen zu bestimmten Zeiten, z.B. „jeden Werktag um 7:00 Wetter + Termine + Börse“, „jeden Freitag 17:00 Wochenrückblick“. Mit JARVIS-Server laufen sie auch, wenn das Handy aus ist (Ergebnis per Push), sonst in der App, sobald sie offen ist. Kostenlos (Gemini). Für Bedingungen („sag mir, WENN …“) nimm watchers.',
+      input_schema:S({aktion:{type:'string', enum:['anlegen','liste','löschen','pausieren','fortsetzen','jetzt_ausführen']}, name:{type:'string'}, zeit:{type:'string', description:'HH:MM (24 h)'}, tage:{type:'array', items:{type:'string', enum:['mo','di','mi','do','fr','sa','so']}, description:'leer = jeden Tag'}, auftrag:{type:'string', description:'Was JARVIS dann tun soll'}, kanal:{type:'string', enum:['push','wichtig','anruf','app'], description:'push = Mitteilung, wichtig = laute Mitteilung, anruf = JARVIS ruft an (kostet, im Kostendeckel), app = nur in der App'}, id:{type:'string'}}, ['aktion'])},
+    async run(i){
+      if (i.aktion === 'anlegen'){
+        if (!i.auftrag || !/^\d{1,2}:\d{2}$/.test(i.zeit || '')) throw new Error('zeit (HH:MM) und auftrag nötig');
+        routinen.push({id:Math.random().toString(36).slice(2, 7), name:(i.name || i.auftrag).slice(0, 40), zeit:i.zeit.padStart(5, '0'), tage:(i.tage || []).filter(Boolean), auftrag:i.auftrag.slice(0, 600), kanal:i.kanal || 'push'});
+      }
+      const r = routinen.find(x => x.id === i.id) || (i.name && routinen.find(x => x.name.toLowerCase() === String(i.name).toLowerCase()));
+      if (i.aktion === 'löschen'){ if (!r) throw new Error('Routine nicht gefunden'); routinen = routinen.filter(x => x !== r); }
+      if (i.aktion === 'pausieren' || i.aktion === 'fortsetzen'){ if (!r) throw new Error('Routine nicht gefunden'); r.aus = i.aktion === 'pausieren'; }
+      if (i.aktion === 'jetzt_ausführen'){ if (!r) throw new Error('Routine nicht gefunden'); setTimeout(() => runRoutine(r, true), 300); }
+      store.set('routinen', routinen); renderLists(); syncWatchersToServer();
+      return {routinen: routinen.map(x => ({id:x.id, name:x.name, zeit:x.zeit, tage:x.tage.length ? x.tage.join(',') : 'täglich', auftrag:x.auftrag, kanal:x.kanal, pausiert:!!x.aus})), läuft_auf: cfg.srv ? 'JARVIS-Server (auch wenn das Handy aus ist)' : 'dieser App (wenn sie offen ist)'};
+    }
+  },
   watchers: {
     label:'WÄCHTER',
     def:{description:'Proaktive Überwachung: Regeln, die JARVIS regelmässig selbst prüft (Web, Wetter, Gerät) und den Nutzer bei Auslösung nach seinen Kontaktregeln benachrichtigt. Läuft in der App, solange sie offen ist; mit eingerichtetem JARVIS-Server zusätzlich alle 15 Minuten auch bei geschlossener App.',
@@ -1914,9 +1984,50 @@ function trackUsage(model, u){
   costLog[monthKey()] = monthCost() + usd; store.set('costLog', costLog); return usd;
 }
 // 5.7 Sparmodus: total ≤ 2 USD (≈ 1.70–1.80 Fr.) per month – 1.60 for the app, 0.40 for the server; Haiku for everything
-const SPAR_APP_USD = 1.60, SPAR_SERVER_USD = 0.40;
+// 5.9: one monthly cap for everything that costs (default 5 Fr.): Claude (app) + phone (server, Twilio incl. number) + Claude on the server if it has no Gemini key
+const SPAR_SERVER_USD = 0.40;
+const srvInfo = () => store.get('srvInfo', {});
+function telBudget(){ if (!cfg.srv) return 0; const s = srvInfo(); return s.twilio === false ? 0 : Math.min(+cfg.budgetTelChf || 0, +cfg.budgetChf || 5); }   // unknown → reserve it (never overspend)
+function claudeCap(){ const s = srvInfo(); return Math.max(0, (+cfg.budgetChf || 5) - telBudget() - (cfg.srv && s.ki !== 'gemini' ? SPAR_SERVER_USD : 0)); }
 const effModel = () => cfg.sparmodus ? 'claude-haiku-5-5' : cfg.model;
-function budgetBlocked(){ if (cfg.sparmodus) return monthCost() >= SPAR_APP_USD; return !cfg.unbegrenzt && monthCost() >= (cfg.apiBudget || 20); }   // 5.6: no limit when „Keine Limits“ is on (Anthropic console limit still applies)
+function budgetBlocked(){ if (cfg.sparmodus) return monthCost() >= claudeCap(); return !cfg.unbegrenzt && monthCost() >= (cfg.apiBudget || 20); }
+async function refreshSrvInfo(){ if (!cfg.srv || !cfg.srvTok) return null; try{ const r = await srv('/api/status'); store.set('srvInfo', {twilio:!!r.twilio, ki:r.ki || 'claude', tel:r.telefon_kosten_monat_usd || 0, kiUsd:r.ki_kosten_monat_usd || 0, routinen:r.routinen || 0, at:Date.now()}); return r; }catch{ return null; } }
+// 5.9 Profi mode: big tasks go to a stronger brain – Claude (inside the cap: Sonnet while < 60 % used, then Haiku) or Gemini Flash (free)
+let turnProfi = false, escalateReq = null, curModel = '';
+const BIG_TASK = /\b(bau|baue|bauen|erstell\w*|programmier\w*|entwickl\w*|app|apps|spiel|game|simulation|3d|animation|visualisier\w*|analysier\w*|analyse|vergleich\w*|recherchier\w*|businessplan|strategie|bewerbung|aufsatz|essay|präsentation|profi|gründlich)\b|wie funktioniert|erkläre? mir/i;
+const bigTask = (t) => t.length > 400 || BIG_TASK.test(t);
+const profiClaude = () => monthCost() < claudeCap() * 0.6 ? 'claude-sonnet-5-5' : 'claude-haiku-5-5';
+async function profiTarget(prov, model){
+  if (hasClaude() && (cfg.key || sessionKey)){
+    try{ await loadSdk(); }catch{}
+    if (getClient() && !budgetBlocked()){
+      const m = cfg.sparmodus ? profiClaude() : cfg.model;   // without the cap the user's own (strong) model – profi never downgrades
+      const label = m.includes('opus') ? 'Claude Opus' : m.includes('sonnet') ? 'Claude Sonnet' : 'Claude Haiku';
+      return prov === 'claude' && model === m ? null : {prov:'claude', model:m, label: label + (cfg.sparmodus ? ' (im Kostendeckel)' : '')};
+    }
+  }
+  const f = gemKey() && gemInfo?.flash;
+  if (f && f !== model && !gemUseToday().aus.includes(f)) return {prov:'gemini', model:f, label:'Gemini Flash (gratis)'};
+  return null;
+}
+// Gemini-only tool calls are shown to Claude as plain text (Claude has its own web tools; unknown tool names would be refused)
+function claudeView(h){
+  const only = new Set(Object.keys(gemTools)), ids = new Map(); let changed = false;
+  const out = h.map(m => {
+    if (!Array.isArray(m.content)) return m;
+    if (m.role === 'assistant' && m.content.some(b => b.type === 'tool_use' && only.has(b.name))){
+      changed = true;
+      return {...m, content: m.content.map(b => b.type === 'tool_use' && only.has(b.name) ? (ids.set(b.id, b.name), {type:'text', text:`[${b.name}: ${JSON.stringify(b.input || {}).slice(0, 300)}]`}) : b)};
+    }
+    if (m.role === 'user' && m.content.some(b => b.type === 'tool_result' && ids.has(b.tool_use_id))){
+      changed = true;
+      const c = m.content.map(b => b.type === 'tool_result' && ids.has(b.tool_use_id) ? {type:'text', text:`[Ergebnis ${ids.get(b.tool_use_id)}: ${(typeof b.content === 'string' ? b.content : JSON.stringify(b.content)).slice(0, 4000) || 'ok'}]`} : b);
+      return {...m, content: c.filter(b => b.type === 'tool_result').concat(c.filter(b => b.type !== 'tool_result'))};   // tool results first, then text
+    }
+    return m;
+  });
+  return changed ? out : h;
+}   // 5.6: no limit when „Keine Limits“ is on (Anthropic console limit still applies)
 
 /* =========================================================
    CLAUDE BRAIN
@@ -1974,6 +2085,13 @@ function gemErrorText(e){
 }
 // web search + page reading for Gemini (Claude has its own server tools); same names, so the instructions fit both
 const gemTools = {
+  profi_modus: {label:'PROFI-MODUS', def:{description:'Übergibt die aktuelle Aufgabe an ein stärkeres Modell. Nur nutzen, wenn sie deutlich zu komplex ist: eigene App, Spiel oder 3D-Szene bauen, umfangreiche Recherche mit Vergleich, schwierige Rechnung oder ein langer, anspruchsvoller Text. NICHT für einfache Fragen.', input_schema:S({grund:{type:'string', description:'Warum ein stärkeres Modell nötig ist (ein Satz)'}}, ['grund'])},
+    async run({grund}){
+      if (cfg.profi === 'aus') return {status:'aus', hinweis:'Profi-Modus ist ausgeschaltet – mach selbst bestmöglich weiter.'};
+      const p = await profiTarget('gemini', curModel);
+      if (!p) return {status:'nicht verfügbar', hinweis:'Kein stärkeres Modell frei (Budget oder Kontingent) – mach selbst bestmöglich weiter.'};
+      escalateReq = {...p, grund}; return {status:'übergeben', an:p.label};
+    }},
   web_search: {label:'WEBSUCHE', def:{description:'Aktuelle Infos aus dem Web (Google-Suche): News, Sport, Preise, Öffnungszeiten, Telefonnummern, Fakten nach deinem Wissensstand. Gibt eine zusammengefasste Antwort mit Quellen zurück.', input_schema:S({query:{type:'string', description:'Präzise Suchanfrage, gern mit Ort und Datum'}}, ['query'])},
     async run({query}){
       const model = gemModel();
@@ -2030,7 +2148,7 @@ function rememberLines(text){
 }
 function freiheitPrompt(){
   const L = cfg.freiheit || 'mitdenken';
-  const spar = cfg.sparmodus ? '\n- SPARMODUS (max. 2 Fr./Monat): halte dich kurz, nutze Websuche nur, wenn wirklich nötig (max. 2), bevorzuge kostenlose Wege (Lagebild, Gedächtnis, Wissensordner, Website statt Telefon). Echte Anrufe über Twilio sind aus.' : '';
+  const spar = cfg.sparmodus ? `\n- KOSTENDECKEL (max. ${+cfg.budgetChf || 5} Fr./Monat für alles, was kostet): Gemini ist gratis. Halte dich kurz, nutze Websuche nur, wenn nötig, bevorzuge kostenlose Wege (Lagebild, Gedächtnis, Wissensordner, Website statt Telefon). Telefoniere nur, wenn der Auftrag es verlangt – der Server stoppt vor dem Telefon-Budget.` : '';
   const rules = {
     vorsichtig:'Vor JEDER verbindlichen Aktion (Buchung, Reservierung, Anruf bei Dritten, Nachricht an andere, Zahlung, Löschen) fragst du zuerst. Am Telefon keine Alternativen annehmen.',
     mitdenken:'Was der Nutzer dir aufgetragen hat (reservieren, Termin machen, anrufen, anmelden), erledigst du OHNE erneute Rückfrage – inklusive einer passenden Alternative, falls sein Wunsch nicht geht. Nachrichten an andere, Zahlungen und Löschen: vorher fragen.',
@@ -2051,7 +2169,7 @@ function dynamicPrompt(){
 }
 let convSystem = null, convDyn = null, convLite = false;   // snapshot per conversation: system prompt stays byte-identical (cache + thinking blocks stay valid)
 // 5.8 light mode for very slow lines: short instructions + core tools (≈ 70 % less upload per message), decided per conversation
-const LITE_TOOLS = ['get_weather','get_location','get_device_status','open_app','set_timer','manage_timers','notes','calendar','memory','contact_user','watchers','telefonat','rueckmeldung','hoerfehler','flashlight','clipboard','share','vibrate','device_control'];
+const LITE_TOOLS = ['get_weather','get_location','get_device_status','open_app','set_timer','manage_timers','notes','calendar','memory','contact_user','watchers','routinen','agenten_buero','telefonat','rueckmeldung','hoerfehler','flashlight','clipboard','share','vibrate','device_control'];
 const liteWanted = () => cfg.netMode === 'leicht' || (cfg.netMode !== 'voll' && slowNet());
 function syncConversationPrompt(){
   const last = history.at(-1);
@@ -2085,7 +2203,7 @@ function systemPromptLite(){
 LEICHT-MODUS – der Nutzer hat gerade ein sehr langsames Netz: antworte kurz und direkt, ohne Fenster oder 3D. Handle selbstständig mit deinen Werkzeugen:
 - Aktuelles → web_search, eine konkrete Seite → web_fetch. Wetter → get_weather. Standort → get_location. Akku/Uhrzeit/Netz → get_device_status.
 - Anrufen, SMS, WhatsApp, Mail, Navigation, Musik → open_app (Nachrichten fertig formulieren, senden tippt der Nutzer). Timer/Wecker/Erinnerung → set_timer.
-- Persönliches merken → memory. Listen/To-dos → notes. Termine → calendar. „Sag mir, wenn …“ → watchers. Bei Dritten anrufen → telefonat. Den Nutzer erreichen → contact_user.
+- Persönliches merken → memory. Listen/To-dos → notes. Termine → calendar. „Sag mir, wenn …“ → watchers. „Jeden Tag um …“ → routinen. Bei Dritten anrufen → telefonat. Den Nutzer erreichen → contact_user.
 - Korrigiert der Nutzer eine falsch gehörte Spracheingabe → hoerfehler.
 
 ${freiheitPrompt()}
@@ -2113,6 +2231,8 @@ Handle selbstständig mit deinen Werkzeugen statt nur zu erklären:
 - Das [Lagebild] in der Nutzernachricht ist vorgeladen (Wetter, Termine, Timer). Nutze es für schnelle Antworten statt neu abzufragen – ausser es ist veraltet oder es geht um einen anderen Ort.
 - Musik hören → play_music (Live-Radio direkt in JARVIS). Bestimmter Song/Künstler → open_app spotify oder youtube.
 - „Ruf mich an / weck mich mit Anruf“ → set_timer mit art "anruf".
+- „Jeden Morgen / jeden Freitag um … mach …“ → routinen (anlegen). „Sag mir, wenn …“ → watchers.
+- „Zeig mir meine Agenten / wer arbeitet gerade / Büro“ → agenten_buero.
 - Nachrichten schreiben → Text fertig formulieren und open_app (whatsapp/sms/email). Senden tippt der Nutzer selbst (Android-Sicherheit).
 - „Bau/Mach mir eine App / ein Spiel / ein Tool“ → create_app. Schreibe ein vollständiges, poliertes, einzelnes HTML-Dokument: mobile-first (viewport meta), Touch-Steuerung, modernes dunkles Design mit Farbverläufen und Animationen, keine Platzhalter. Externe Bibliotheken nur von cdnjs.cloudflare.com oder cdn.jsdelivr.net. localStorage ist in Apps NICHT verfügbar (in try/catch kapseln). Sag danach in einem Satz, was die App kann. Um eine App zu verbessern: my_apps quelltext holen, dann create_app mit gleichem Namen.
 Wenn etwas technisch auf dem Handy nicht geht (z.B. WLAN schalten, fremde Apps fernsteuern), sag es ehrlich in einem Satz und biete die beste Alternative an.
@@ -2182,7 +2302,8 @@ async function handleInput(text, imageDataUrl, opts = {}){
   const c = getClient();
   if (!c){ if (cfg.keyEnc && !sessionKey){ if (await askPin()) return handleInput(text, imageDataUrl, opts); return; } toast('Bitte zuerst deinen Anthropic API-Key in den Einstellungen eintragen.'); openSettings(); return; }
   }
-  if (prov === 'claude' && budgetBlocked()){ toast(`Monatsbudget für die KI erreicht (geschätzt ${monthCost().toFixed(2)} von ${cfg.apiBudget} USD). In den Einstellungen erhöhen, wenn du weitermachen willst.`); return; }
+  if (prov === 'claude' && budgetBlocked()){ toast(cfg.sparmodus ? `Kostendeckel erreicht: Claude hat diesen Monat ${monthCost().toFixed(2)} von ${claudeCap().toFixed(2)} Fr. verbraucht. Mit einem Gemini-Key geht es gratis weiter.` : `Monatsbudget für die KI erreicht (geschätzt ${monthCost().toFixed(2)} von ${cfg.apiBudget} USD). In den Einstellungen erhöhen, wenn du weitermachen willst.`); return; }
+  turnProfi = !opts.silent && !!text && cfg.profi !== 'aus' && bigTask(text);
   shutUp(); stopRecognition(true);
   if (!opts.silent && text){ lastUserText = text; }
   if (!opts.silent) addMsg('user', md(text || '📷'), imageDataUrl ? Object.assign(document.createElement('img'), {src:imageDataUrl, className:'thumb'}) : null);
@@ -2222,6 +2343,8 @@ async function runAgent(){
   busy = true; setState('think'); chirpOn(); hud.pulse(.8);
   if (slowNet()) L.hold(true);   // 5.8: on a very slow line the background download pauses while JARVIS talks to the AI
   let c = isG ? null : getClient(), malformedRetry = false;
+  const wantProfi = turnProfi; turnProfi = false; escalateReq = null;
+  if (wantProfi){ const p = await profiTarget(prov, model); if (p){ prov = p.prov; isG = prov === 'gemini'; model = p.model; c = isG ? null : getClient(); lastModelUsed = model; sysLine(`🧠 <b>Profi-Modus</b> für diese Aufgabe: ${esc(p.label)}`); } }
   const aiEl = addMsg('ai', ''); const body = aiEl.querySelector('.body');
   let textSoFar = '', textEl = document.createElement('div'); body.append(textEl);
   const speaker = sentenceSpeaker();
@@ -2236,7 +2359,7 @@ async function runAgent(){
         model,
         max_tokens: model.startsWith('claude-haiku') ? 8000 : 32000,
         system: convSystem,
-        messages: history,   // append-only; never strip thinking blocks ourselves (Claude docs) – the API drops mismatched ones
+        messages: claudeView(history),   // append-only; never strip thinking blocks ourselves (Claude docs) – the API drops mismatched ones; 5.9: Gemini-only tools as text
         thinking: {type:'adaptive', block_binding:{prefix_mismatch_behavior:'drop_block'}},   // otherwise a changed history returns HTTP 400 on new accounts
         tools: toolDefs(model),
         output_config: {effort: model.startsWith('claude-haiku') ? 'low' : cfg.effort},
@@ -2265,6 +2388,11 @@ async function runAgent(){
           if (state === 'think' && !ttsQueue) setState(cfg.speak ? 'think' : 'speak');
         }
       };
+      curModel = model;
+      if (!isG && cfg.sparmodus && budgetBlocked()){   // 5.9: hard cap – never one more paid request
+        if (gemKey()){ prov = 'gemini'; isG = true; model = gemModel(); c = null; lastModelUsed = model; sysLine('💰 Claude-Anteil des Kostendeckels aufgebraucht – Gemini macht gratis weiter.'); }
+        else throw Object.assign(new Error('Kostendeckel erreicht'), {budget:true});
+      }
       let msg = null;
       for (let att = 0; !msg; att++){
         try{
@@ -2337,6 +2465,7 @@ async function runAgent(){
       opsSync();
       renderPending(body);
       history.push({role:'user', content: results});
+      if (escalateReq){ const p = escalateReq; escalateReq = null; prov = p.prov; isG = prov === 'gemini'; model = p.model; c = isG ? null : getClient(); lastModelUsed = model; sysLine(`🧠 <b>Profi-Modus</b>: ${esc(p.label)} übernimmt (${esc(String(p.grund || '').slice(0, 80))})`); }
     }
     speaker.flush();
     opsSync(true);
@@ -2348,6 +2477,7 @@ async function runAgent(){
     setState('error');
     let m = e?.message || String(e);
     if (e instanceof G.GeminiError) m = gemErrorText(e);
+    else if (e?.budget) m = `Kostendeckel erreicht (${(+cfg.budgetChf || 5).toFixed(2)} Fr. diesen Monat). Mit einem Gemini-Key geht es gratis weiter – oder Deckel in den Einstellungen anpassen.`;
     else if (e?.status === 401) m = 'Der API-Key ist ungültig. Bitte in den Einstellungen prüfen.';
     else if (e?.status === 429) m = 'Rate-Limit erreicht – bitte kurz warten.';
     else if (e?.status === 529 || e?.status >= 500) m = 'Die KI-Server sind gerade überlastet. Versuch es gleich nochmal.';
@@ -2392,7 +2522,7 @@ function renderPending(body){
    ========================================================= */
 function fillSettings(){
   document.querySelectorAll('#settings [data-k]').forEach(el => { const v = cfg[el.dataset.k]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v ?? ''; });
-  { const e = document.getElementById('sparNow'); if (e) e.textContent = `Diesen Monat: ${monthCost().toFixed(2)} von ${cfg.sparmodus ? SPAR_APP_USD.toFixed(2) : (cfg.unbegrenzt ? '∞' : (cfg.apiBudget || 20))} USD (App)`; }
+  { const e = document.getElementById('sparNow'); if (e){ const si = srvInfo(); e.textContent = cfg.sparmodus ? `Diesen Monat: Claude ${monthCost().toFixed(2)} von ${claudeCap().toFixed(2)} Fr.${cfg.srv ? ` · Telefon ${(si.tel || 0).toFixed(2)} von ${telBudget().toFixed(2)} Fr.` : ''} · Gemini 0 Fr.` : `Diesen Monat: ${monthCost().toFixed(2)} von ${cfg.unbegrenzt ? '∞' : (cfg.apiBudget || 20)} USD (App)`; } }
   { const e = document.getElementById('elNow'); if (e) e.textContent = (elChars[monthKey()] ? `· diesen Monat ${elChars[monthKey()]} Zeichen` : ''); }
   fillGemNow();
   { const e = document.getElementById('voiceNow'); if (e){ const u = vUse(); e.textContent = `· spricht gerade: ${VOICE_NAMES[voiceOrder()[0] || 'device']}${u.gemini ? ' · Gemini ' + u.gemini + '×' : ''}${u.azure ? ' · Azure ' + u.azure + ' Z.' : ''}${elChars[monthKey()] ? ' · ElevenLabs ' + elChars[monthKey()] + '/' + (+cfg.elMax || 10000) + ' Z.' : ''} · 0 Fr.`; } }
@@ -2426,6 +2556,7 @@ function renderLists(){
   const mk = (arr, el, txt, del) => { el.innerHTML = arr.length ? '' : '<p class="hint">Leer.</p>';
     arr.forEach(x => { const d = document.createElement('div'); d.className='memitem'; d.innerHTML = `<span>${txt(x)}</span>`; const b = document.createElement('button'); b.textContent='✕'; b.onclick = () => del(x); d.append(b); el.append(d); }); };
   mk(watchers, $('#watchList'), w => `<b>${esc(w.regel)}</b><br><span class="hint">alle ${w.intervall_min} min · ${esc(w.stufe)} · ${esc(w.last || 'noch nicht geprüft')}</span>`, w => { watchers = watchers.filter(x=>x!==w); store.set('watchers', watchers); renderLists(); });
+  { const rl = document.getElementById('routList'); if (rl) mk(routinen, rl, r => `<b>${esc(r.name)}</b>${r.aus ? ' <span class="hint">(pausiert)</span>' : ''}<br><span class="hint">${esc(r.zeit)} · ${r.tage?.length ? esc(r.tage.join(', ')) : 'täglich'} · ${esc(r.kanal)} · ${esc(r.auftrag.slice(0, 90))}</span>`, r => { routinen = routinen.filter(x => x !== r); store.set('routinen', routinen); renderLists(); syncWatchersToServer(); }); }
   mk(memory, $('#memList'), m => esc(m.text), m => { memory = memory.filter(x=>x!==m); store.set('memory', memory); renderLists(); });
   mk(notes, $('#noteList'), n => `<b>${esc(n.title)}</b><br><span class="hint">${esc(n.text).replace(/\n/g,'<br>')}</span>`, n => { notes = notes.filter(x=>x!==n); store.set('notes', notes); renderLists(); });
   { const fl = document.getElementById('fixList'); if (fl) mk(sttFix, fl, f => `„${esc(f.falsch)}“ → „${esc(f.richtig)}“`, f => { sttFix = sttFix.filter(x => x !== f); store.set('sttFix', sttFix); renderLists(); }); }
@@ -3004,9 +3135,9 @@ $('#unlockAll').onclick = async () => {
   await step('Daten dauerhaft speichern', async () => (await navigator.storage?.persist?.()) ? true : 'entscheidet der Browser später automatisch');
   await step('Bildschirm wach halten', async () => { if (!('wakeLock' in navigator)) return 'nicht unterstützt'; try{ const l = await navigator.wakeLock.request('screen'); await l.release(); return true; }catch{ return 'klappt, sobald JARVIS im Vordergrund läuft (keine Abfrage nötig)'; } });
   Object.assign(cfg, {freiheit:'frei', unbegrenzt:true, allowCall:true, allowThird:true, rueckruf:true, fastMode:true, ctxPrefetch:true, speak:true, quietFrom:'00:00', quietTo:'00:00',
-    wake:media || cfg.wake, agentRemote:!!(cfg.srv && cfg.srvTok) || cfg.agentRemote});
+    wake:media || cfg.wake});   // 5.9: laptop remote control stays as it is (not needed)
   store.set('cfg', cfg); fillSettings(); syncWatchersToServer(); applyWakeLock(); afterIdle();
-  res.push(['Maximale Freiheit: Freie Hand, keine Limits, Anrufe an dich und andere erlaubt, „Hey Jarvis“ an' + (cfg.sparmodus ? ' – Kostendeckel 2 Fr. bleibt (Sparmodus)' : ''), true]);
+  res.push(['Maximale Freiheit: Freie Hand, keine Limits, Anrufe an dich und andere erlaubt, „Hey Jarvis“ an' + (cfg.sparmodus ? ` – Kostendeckel ${+cfg.budgetChf || 5} Fr. bleibt` : ''), true]);
   if (!hasKey()) res.push(['KI-Key fehlt – ohne ihn kann JARVIS nicht denken', 'gratis: aistudio.google.com/apikey → „API-Schlüssel erstellen“ → kopieren → „KEY EINFÜGEN“']);
   else if (gemKey()) res.push(['KI: Gemini (gratis) ' + (gemInfo?.lite ? '· ' + gemInfo.lite : ''), true]);
   if (!cfg.srv) res.push(['Telefon & Laptop-Fernsteuerung', 'brauchen zusätzlich den JARVIS-Server (Einrichtungs-Assistent)']);
@@ -3016,7 +3147,7 @@ $('#unlockAll').onclick = async () => {
 };
 for (const id of ['kFiles', 'kFolder']) $('#' + id).onchange = async (e) => { const n = await kImport([...e.target.files]); toast(`📚 ${n} Dateien eingelesen – ${kIndex?.N || 0} Abschnitte durchsuchbar.`); e.target.value = ''; };
 $('#kClear').onclick = async () => { if (!confirm('Wissensordner auf diesem Gerät leeren?')) return; const root = await navigator.storage.getDirectory(); await root.removeEntry('wissen', {recursive:true}).catch(() => {}); await kBuild(); toast('Wissensordner geleert.'); };
-$('#testSrv').onclick = async () => { readSettings(); try{ const r = await srv('/api/status'); toast(`Server OK · Telefon: ${r.twilio ? 'eingerichtet' : 'nicht eingerichtet'} · Wächter: ${r.wächter} · Server-KI diesen Monat: ${(r.ki_kosten_monat_usd || 0).toFixed(2)} USD · letzter Cron: ${r.heartbeat ? new Date(r.heartbeat.ts).toLocaleString('de-CH') : 'noch nie'}`); syncWatchersToServer(); }catch(e){ toast('Server: ' + e.message); } };
+$('#testSrv').onclick = async () => { readSettings(); try{ const r = await refreshSrvInfo() || await srv('/api/status'); toast(`Server OK · Telefon: ${r.twilio ? 'eingerichtet' : 'nicht eingerichtet'} · Wächter: ${r.wächter} · Server-KI: ${r.ki === 'gemini' ? 'Gemini (gratis)' : (r.ki_kosten_monat_usd || 0).toFixed(2) + ' USD'} · Telefon diesen Monat: ${(r.telefon_kosten_monat_usd || 0).toFixed(2)} $ · letzter Cron: ${r.heartbeat ? new Date(r.heartbeat.ts).toLocaleString('de-CH') : 'noch nie'}`); syncWatchersToServer(); }catch(e){ toast('Server: ' + e.message); } };
 $('#connectAgent').onclick = () => { readSettings(); if (agentWs) agentWs.close(); agentWs = null; agentConnect(); };
 $('#testPush').onclick = async () => { readSettings(); const r = await contactUser({stufe:'push', titel:'J.A.R.V.I.S.', nachricht:'Test-Push: Verbindung steht.'}); toast('Push: ' + (r.push || '—')); };
 $('#pHumor').oninput = e => $('#pHumorVal').textContent = ['aus','selten','gelegentlich','oft'][e.target.value];
@@ -3079,7 +3210,7 @@ async function boot(){
     await new Promise(r => setTimeout(r, 170));
   }
   $('#boot').classList.add('hide');
-  setTimeout(() => loadDeferred().then(() => { if (provider() === 'claude' || cfg.gemFallbackClaude) loadSdk().catch(() => {}); setTimeout(checkUpdate, 60000); }), 200);   // 5.8
+  setTimeout(() => loadDeferred().then(() => { if (provider() === 'claude' || cfg.gemFallbackClaude) loadSdk().catch(() => {}); setTimeout(checkUpdate, 60000); if (cfg.srv && Date.now() - (srvInfo().at || 0) > 6 * 3600e3) refreshSrvInfo(); }), 200);   // 5.8 / 5.9
   setTimeout(() => $('#boot').remove(), 900);
 }
 
@@ -3100,7 +3231,7 @@ async function importSetupLink(){
   if (!okUrl || !okTok || (d.ntfy && !/^[a-z0-9_-]{6,64}$/.test(d.ntfy))){ toast('Einrichtungs-Link ungültig – nichts übernommen.'); return true; }
   const yes = await requireApproval({art:'Einrichtung übernehmen', was:`JARVIS-Server ${d.srv}${d.ntfy ? ' · Push-Thema ' + d.ntfy : ''}${d.agentRemote ? ' · PC-Agent über den Server' : ''}`, wo:'Nur übernehmen, wenn der Link aus DEINEM Einrichtungs-Assistenten stammt.', key:'setup:' + d.srv});
   if (!yes) return true;
-  Object.assign(cfg, {srv:d.srv.replace(/\/$/, ''), srvTok:d.srvTok, ...(d.ntfy ? {ntfy:d.ntfy} : {}), agentRemote:!!d.agentRemote}); store.set('cfg', cfg);
+  Object.assign(cfg, {srv:d.srv.replace(/\/$/, ''), srvTok:d.srvTok, ...(d.ntfy ? {ntfy:d.ntfy} : {}), agentRemote:!!d.agentRemote, ...(typeof d.nummerUsd === 'number' && d.nummerUsd >= 0 && d.nummerUsd <= 50 ? {nummerUsd:d.nummerUsd} : {})}); store.set('cfg', cfg); refreshSrvInfo();
   sysLine('🔗 <b>Einrichtung übernommen</b> · Server verbunden'); syncWatchersToServer();
   try{ const r = await srv('/api/status'); sysLine(`✅ Server antwortet · Telefon: ${r.twilio ? 'eingerichtet' : 'nicht eingerichtet'} · Push: ${r.ntfy ? 'ja' : 'nein'}`); }catch(e){ sysLine('⚠️ Server antwortet noch nicht: ' + esc(e.message)); }
   return true;

@@ -1,4 +1,18 @@
-# J.A.R.V.I.S. 5.8 🤖
+# J.A.R.V.I.S. 5.9 🤖
+
+> **Neu in 5.9: alles zusammen für max. 5 Fr. im Monat.**
+> 1. **🧠 Profi-Modus:** Alltägliches denkt Gemini gratis. Grosse Aufgaben (App/Spiel/3D bauen, Analysen, Vergleiche, lange Texte)
+>    übernimmt ein stärkeres Modell: Claude Sonnet im Kostendeckel (wenn du einen Anthropic-Key hast), sonst Gemini Flash gratis.
+> 2. **💰 Kostendeckel:** Einstellungen → SCHNELLSTART → „Deckel gesamt“ (Standard 5 Fr.) und „davon Telefon“ (3.50 Fr.).
+>    Alles, was Geld kostet (Claude + Telefon), bleibt darunter – auch mitten in einer Aufgabe.
+> 3. **🔁 Routinen:** Sag z.B. „Jeden Werktag um 7 Uhr: Wetter, Termine und Börse“. Mit Server laufen sie auch bei ausgeschaltetem
+>    Handy und kommen als Push.
+> 4. **🏢 Agenten-Büro:** „Zeig mir meine Agenten“ – alle Helfer live an ihren Schreibtischen.
+> 5. **Server gratis:** Wächter, Routinen und Telefon-Gespräche denken auf dem Server mit Gemini (Assistent fragt den Key).
+> 6. **📞 Telefon (optional, Twilio):** echte Preise, echte Minuten, harter Deckel. Laptop-Fernsteuerung wird nicht mehr eingerichtet.
+> Prüfbericht: **STATUS-5.9.md**
+
+## Version 5.8
 
 > **Neu in 5.8: gratis denken, gratis sprechen.**
 > 1. **🆓 Gratis-Gehirn (Gemini):** https://aistudio.google.com/apikey → „API-Schlüssel erstellen“ → kopieren → in JARVIS
