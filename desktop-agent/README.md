@@ -1,6 +1,7 @@
-# JARVIS PC-Agent – Websites bedienen
+# JARVIS PC-Agent – Dateien am PC & Websites bedienen
 
-Lässt JARVIS echte Websites in einem eigenen Browserfenster bedienen: suchen, lesen, klicken, Formulare ausfüllen,
+Gibt JARVIS am Laptop echte Hände: **deine Dateien** (Downloads, Desktop, Dokumente … inkl. Unterordner) sortieren, suchen,
+lesen, öffnen – und echte Websites in einem eigenen Browserfenster bedienen: lesen, klicken, Formulare ausfüllen,
 Reservierungen und Bestellungen **vorbereiten**.
 
 ## Start – ohne Admin-Rechte, ohne Installation
@@ -12,7 +13,8 @@ Reservierungen und Bestellungen **vorbereiten**.
    - Als Browser nimmt der Agent das **Edge bzw. Chrome, das schon auf dem PC ist** (mit eigenem, getrenntem Profil – dein normaler
      Browser bleibt unberührt). Nur wenn keins da ist, lädt er einmalig Chromium (ca. 150 MB) in deinen Benutzerordner.
    - Wird ein Download unterbrochen: einfach nochmal doppelklicken, er macht weiter.
-4. Das angezeigte **Token** in JARVIS → Einstellungen → „PC-Agent“ eintragen → VERBINDEN. Das schwarze Fenster offen lassen.
+4. Das angezeigte **Token** in JARVIS → Einstellungen → „PC-Agent“ eintragen → VERBINDEN. Das Token bleibt bei jedem Start gleich
+   (Datei `token.txt`) – nach einem Neustart verbindet sich JARVIS von selbst. Das schwarze Fenster offen lassen.
 
 JARVIS muss dafür am **selben PC** in Chrome/Edge offen sein (Verbindung nur über 127.0.0.1).
 Chrome fragt evtl. einmal nach der Erlaubnis für „Geräte im lokalen Netzwerk“ – zulassen.
@@ -57,3 +59,17 @@ derselben Bestätigungssperre.
 - Doppelklick-Starter für Windows (`PC-Agent-starten.cmd`) und Mac/Linux (`PC-Agent-starten.command`), Node.js portabel.
 - Nutzt Edge/Chrome vom PC statt 150 MB Download; fehlt beides, lädt er Chromium selbst nach (auch nach einem abgebrochenen Download).
 - Behoben: Ordner mit Leerzeichen im Namen (z.B. „C:\Users\Vorname Nachname\…“) – das Browserprofil landete vorher unter einem falschen Pfad.
+
+## Neu in 5.9.4: Dateien am PC, Robotertests, fester Token
+- **Dateien am PC** (`dateien.mjs`): JARVIS darf im ganzen Benutzerordner arbeiten – Downloads, Desktop, Dokumente, Bilder, OneDrive,
+  alle Unterordner, beliebig viele Dateien – und auf weiteren Laufwerken/USB-Sticks. Nie in System-, Programm- oder versteckten Ordnern
+  (Windows, Programme, AppData, `.ssh` …). Der Browser allein darf Downloads/Desktop/Dokumente gar nicht freigeben.
+  - Sortieren (nach Typ, Jahr, Monat oder eigenen Regeln), Suchen, Verschieben, Umbenennen, Ordner anlegen: jede Verschiebung wird
+    im echten Dateisystem geprüft und kann mit **rückgängig** zurückgenommen werden. Unterordner, Verknüpfungen und halbe Downloads bleiben.
+  - Lesen: Text, Word (.docx), PowerPoint (.pptx) – zum Zusammenfassen oder Lernen. Öffnen mit dem passenden Programm.
+  - **Löschen** verschiebt nur in den Ordner `JARVIS-Papierkorb` und braucht **immer** deine Bestätigung. **Programme starten** ebenso.
+- **Robotertests** (Google „ungewöhnlicher Datenverkehr“, „Ich bin kein Roboter“, Cloudflare …) werden erkannt, nie selbst gelöst:
+  das Browserfenster kommt nach vorne, JARVIS bittet dich, kurz zu klicken, und wartet (`warten_auf_mensch`).
+  Gesucht wird über die Google-Suche der KI-Schnittstelle (ohne Robotertest), danach öffnet der Agent die Website direkt.
+- **Fester Token** (`token.txt`): nur einmal eintragen.
+- Test: `node tests/agent-dateien-test.mjs <agent-ordner>` (14 Prüfungen in einem Test-Benutzerordner).

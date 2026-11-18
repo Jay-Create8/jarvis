@@ -380,8 +380,8 @@ body.immersive #chatToggle{display:grid}
   <div class="field"><label>Max. Telefonanrufe pro Tag</label><input id="cMaxCalls" type="number" min="0" max="20"></div>
   <div class="field"><label>Anruf-Budget pro Monat (USD, geschätzt)</label><input id="cBudget" type="number" min="0" max="200" step="1"></div>
   <div class="field"><label>Deine Kontaktregeln</label><textarea id="cfgRules" placeholder="z.B. Nach 22 Uhr nur bei Notfällen anrufen. Börsen-News nur per Push."></textarea></div>
-  <h3>PC-AGENT (WEBSITES BEDIENEN)</h3>
-  <p class="hint">Damit kann JARVIS am Laptop echte Websites bedienen (suchen, Formulare ausfüllen, Reservierungen vorbereiten). <a href="JARVIS-PC-Agent.zip" download id="agentZip">📥 PC-Agent herunterladen</a> (ZIP, ca. 12 KB) → entpacken → Doppelklick auf <b>PC-Agent-starten.cmd</b> (Mac: .command). <b>Keine Admin-Rechte nötig</b> – nimmt Edge/Chrome, das schon auf dem PC ist. Dann das angezeigte Token hier eintragen. Kaufen, Buchen, Bezahlen oder Absenden fragt immer zuerst dich.</p>
+  <h3>PC-AGENT (DATEIEN &amp; WEBSITES AM LAPTOP)</h3>
+  <p class="hint">Damit kann JARVIS am Laptop mit <b>deinen Dateien</b> arbeiten (Downloads, Desktop, Dokumente inkl. Unterordner: sortieren, suchen, lesen, öffnen) und echte Websites bedienen (Formulare ausfüllen, Reservierungen vorbereiten). <a href="JARVIS-PC-Agent.zip" download id="agentZip">📥 PC-Agent herunterladen</a> (ZIP, ca. 22 KB) → entpacken → Doppelklick auf <b>PC-Agent-starten.cmd</b> (Mac: .command). <b>Keine Admin-Rechte nötig</b> – nimmt Edge/Chrome, das schon auf dem PC ist. Dann das angezeigte Token hier eintragen – es bleibt gleich, nach einem Neustart verbindet sich JARVIS von selbst. Kaufen, Buchen, Bezahlen, Absenden, Löschen und Programme starten fragen immer zuerst dich.</p>
   <div class="field"><label>PC-Agent Token</label><input id="cfgAgent" type="password" autocomplete="off"></div>
   <button class="btn" id="connectAgent">VERBINDEN</button> <span class="hint" id="agentState">nicht verbunden</span>
   <h3>SELBSTTEST 5.1 (ECHTE KI)</h3>
@@ -425,6 +425,11 @@ body.immersive #chatToggle{display:grid}
   <h3>WÄCHTER</h3>
   <p class="hint">Regeln, die JARVIS regelmässig selbst prüft, solange die App offen ist (z.B. „Sag mir, wenn es morgen regnet“).</p>
   <div id="watchList"></div>
+
+  <h3>ÜBER DICH (STECKBRIEF)</h3>
+  <p class="hint">JARVIS ist <b>nicht</b> mit deinem Google-Konto verbunden – der Gemini-Key ist nur sein „Gehirn“. Was er über dich weiss, steht hier (und im Gedächtnis). Er füllt es auch selbst, wenn du ihm etwas erzählst. Bleibt nur auf diesem Gerät.</p>
+  <div id="profilFields"></div>
+  <button class="btn" id="kennenlernen">🤝 KENNENLERNEN – JARVIS FRAGT DICH</button>
 
   <h3>GEDÄCHTNIS</h3>
   <p class="hint">Was JARVIS sich über dich gemerkt hat. Sag z.B. „Merk dir, dass ich Vegetarier bin“.</p>
@@ -827,6 +832,19 @@ setInterval(checkTimers, 1000);
    TOOLS (client side)
    ========================================================= */
 const S = (props, req=[]) => ({type:'object', properties:props, required:req, additionalProperties:false});
+// 5.9.4: fixed profile of the user ("Steckbrief") – always in the prompt, filled by the user or by JARVIS
+const PROFIL_FELDER = [['wohnadresse','Wohnadresse (Strasse, PLZ, Ort)'], ['schule_arbeit','Schule / Lehre / Arbeit (Name und Adresse)'], ['geburtstag','Geburtstag'],
+  ['personen','Wichtige Personen (Familie, Freunde – gern mit Geburtstag)'], ['vorlieben','Vorlieben & Abneigungen (Essen, Musik, Hobbys, Sport)'], ['gesundheit','Gesundheit (Allergien, Medikamente)'],
+  ['ziele','Ziele & aktuelle Projekte'], ['sonstiges','Sonstiges, das JARVIS wissen soll']];
+function fillProfil(){
+  const box = document.getElementById('profilFields'); if (!box) return; const p = cfg.profil || {};
+  if (!box.children.length) box.innerHTML = PROFIL_FELDER.map(([k, l]) => `<div class="field"><label>${esc(l)}</label><input data-p="${k}" autocomplete="off"></div>`).join('');
+  box.querySelectorAll('[data-p]').forEach(el => { el.value = p[el.dataset.p] || ''; });
+}
+function profilPrompt(){
+  const p = cfg.profil || {}; const have = PROFIL_FELDER.filter(([k]) => p[k]); const miss = PROFIL_FELDER.filter(([k]) => !p[k]).map(([, l]) => l.split(' (')[0]);
+  return `Steckbrief des Nutzers (fest, von ihm bzw. dir gepflegt – mit steckbrief setzen ergänzen, sobald er etwas davon erwähnt):\n${have.length ? have.map(([k, l]) => `- ${l.split(' (')[0]}: ${p[k]}`).join('\n') : '- (noch leer)'}${miss.length ? `\nNoch unbekannt: ${miss.join(', ')}. Frag ab und zu beiläufig nach EINER Angabe, wenn es gerade passt (höchstens einmal pro Gespräch) – nie verhören.` : ''}\nNutze den Steckbrief aktiv: „nach Hause“ = Wohnadresse, Wege zur Schule/Arbeit, Geburtstage erinnern, Vorschläge nach Vorlieben, Allergien beachten.`;
+}
 const tools = {
   get_device_status: {
     label:'SYSTEMSCAN',
@@ -1000,6 +1018,21 @@ const tools = {
       if (aktion==='merken' && text){ memory.push({id:Math.random().toString(36).slice(2,7), text}); }
       if (aktion==='vergessen'){ memory = memory.filter(m=>m.id!==id && m.text!==text); }
       store.set('memory', memory); renderLists(); return memory;
+    }
+  },
+  steckbrief: {
+    label:'STECKBRIEF',
+    def:{description:'Dein fester Steckbrief über den Nutzer (Adresse, Schule/Arbeit, Geburtstag, Familie/Freunde, Vorlieben, Gesundheit). Er steht dir in jedem Gespräch zur Verfügung. Erwähnt der Nutzer etwas davon, speichere es SOFORT mit setzen (nur die genannten Felder) – ohne nachzufragen. Du bist NICHT mit seinem Google-Konto verbunden: was du über ihn weisst, kommt nur von hier und aus dem Gedächtnis.',
+      input_schema:S({aktion:{type:'string', enum:['setzen','lesen']}, felder:{type:'object', properties:Object.fromEntries(PROFIL_FELDER.map(([k, l]) => [k, {type:'string', description:l}]))}}, ['aktion'])},
+    async run({aktion, felder}){
+      cfg.profil ||= {};
+      if (aktion === 'setzen' && felder){
+        const neu = Object.entries(felder).filter(([k, v]) => PROFIL_FELDER.some(([f]) => f === k) && typeof v === 'string' && v.trim());
+        neu.forEach(([k, v]) => { cfg.profil[k] = v.trim().slice(0, 400); }); store.set('cfg', cfg); fillProfil();
+        if (neu.length) sysLine('📇 Steckbrief gespeichert: ' + esc(neu.map(([k]) => PROFIL_FELDER.find(([f]) => f === k)[1]).join(', ')));
+        return {gespeichert:neu.map(([k]) => k), steckbrief:cfg.profil};
+      }
+      return {steckbrief:cfg.profil, fehlt:PROFIL_FELDER.filter(([k]) => !cfg.profil[k]).map(([, l]) => l)};
     }
   },
   notes: {
@@ -1508,17 +1541,19 @@ async function agentCallRemote(aktion, args){
   }
   throw new Error('PC-Agent antwortet nicht (Zeitüberschreitung über den Server). Der Auftrag verfällt nach 2 Minuten und wird nicht mehr ausgeführt.');
 }
-function agentCall(aktion, args = {}){
+function agentCall(aktion, args = {}, timeoutMs = 60000){
   if ((!agentWs || agentWs.readyState !== 1) && cfg.agentRemote && cfg.srv && cfg.srvTok) return agentCallRemote(aktion, args);
   return new Promise((res, rej) => {
     if (!agentWs || agentWs.readyState !== 1) return rej(new Error('PC-Agent nicht verbunden. Am Laptop: Einstellungen → PC-Agent → „PC-Agent herunterladen“, entpacken, Doppelklick auf PC-Agent-starten.cmd (keine Admin-Rechte nötig) und das Token eintragen.'));
     const rid = Math.random().toString(36).slice(2);
     agentReq.set(rid, m => m.ok ? res(m.data) : rej(new Error(m.data)));
     agentWs.send(JSON.stringify({rid, aktion, args}));
-    setTimeout(() => { if (agentReq.has(rid)){ agentReq.delete(rid); rej(new Error('PC-Agent antwortet nicht')); } }, 60000);
+    setTimeout(() => { if (agentReq.has(rid)){ agentReq.delete(rid); rej(new Error('PC-Agent antwortet nicht')); } }, timeoutMs);
   });
 }
 setTimeout(agentConnect, 1500);
+// 5.9.4: the agent keeps its token (token.txt) → after a restart of the agent JARVIS reconnects by itself
+setInterval(() => { if (cfg.agentTok && !(agentWs && agentWs.readyState <= 1)) agentConnect(); }, 8000);
 // Human-in-the-loop: the one-time code goes ONLY through this dialog, never to the model.
 /* ---------- Central approval: binding actions, money, messages to others, irreversible changes ---------- */
 const approvalLog = store.get('approvalLog', []); const recentApprovals = new Map();
@@ -1726,16 +1761,32 @@ Object.assign(tools, {
   },
   pc_browser: {
     label:'WEB-AGENT',
-    def:{description:'Bedient ECHTE Websites über den JARVIS PC-Agent auf dem Computer des Nutzers (z.B. Restaurant suchen und Reservierung vorbereiten, Essen bestellen vorbereiten, Formulare ausfüllen, recherchieren). Ablauf: öffnen → lesen (liefert Text + Elemente mit ids e1, e2 …) → klicken/tippen mit id → erneut lesen. Verbindliche Aktionen (kaufen, bestellen, buchen, bezahlen, absenden) werden blockiert, bis der Nutzer selbst bestätigt – das passiert automatisch per Dialog; lehnt er ab, brich ab. Nutze screenshot, wenn das Layout unklar ist. Erfinde nie, dass etwas gebucht/bestellt wurde, ohne Bestätigung der Website.',
-      input_schema:S({aktion:{type:'string', enum:['öffnen','lesen','klicken','tippen','auswählen','scrollen','zurück','screenshot','status']}, url:{type:'string'}, id:{type:'string'}, text:{type:'string'}, enter:{type:'boolean'}, wert:{type:'string'}, richtung:{type:'string', enum:['oben','unten']}}, ['aktion'])},
+    def:{description:'Bedient ECHTE Websites über den JARVIS PC-Agent auf dem Computer des Nutzers (z.B. Restaurant suchen und Reservierung vorbereiten, Essen bestellen vorbereiten, Formulare ausfüllen, recherchieren). Ablauf: öffnen → lesen (liefert Text + Elemente mit ids e1, e2 …) → klicken/tippen mit id → erneut lesen. Verbindliche Aktionen (kaufen, bestellen, buchen, bezahlen, absenden) werden blockiert, bis der Nutzer selbst bestätigt – das passiert automatisch per Dialog; lehnt er ab, brich ab. Nutze screenshot, wenn das Layout unklar ist. SUCHEN: nie google.com/bing/duckduckgo öffnen (Suchmaschinen zeigen ferngesteuerten Browsern Robotertests) – nimm aktion suchen {anfrage} und öffne danach die passende Website direkt. Kommt mensch_nötig (Robotertest/Captcha): NIE selbst lösen oder umgehen – der Nutzer klickt ihn selbst an; rufe warten_auf_mensch auf. Erfinde nie, dass etwas gebucht/bestellt wurde, ohne Bestätigung der Website.',
+      input_schema:S({aktion:{type:'string', enum:['suchen','öffnen','lesen','klicken','tippen','auswählen','scrollen','zurück','screenshot','warten_auf_mensch','status']}, anfrage:{type:'string', description:'Suchbegriff (nur bei suchen)'}, url:{type:'string'}, id:{type:'string'}, text:{type:'string'}, enter:{type:'boolean'}, wert:{type:'string'}, richtung:{type:'string', enum:['oben','unten']}}, ['aktion'])},
     async run(i){
       const {aktion, ...args} = i;
-      const stepLabel = {öffnen:'Öffne ' + (args.url || ''), lesen:'Lese Seite', klicken:'Klicke ' + (args.id || ''), tippen:'Tippe in ' + (args.id || ''), auswählen:'Wähle ' + (args.wert || ''), scrollen:'Scrolle', zurück:'Zurück', screenshot:'Screenshot', status:'Status'}[aktion] || aktion;
+      // 5.9.4: search engines (Google, DuckDuckGo, Bing) show robot tests to remote-controlled browsers → search through the
+      // official Google search of the Gemini API instead, then open the right website directly
+      if (aktion === 'suchen' && gemKey()){
+        const q = args.anfrage || args.text || args.url || '';
+        const model = gemModel();
+        const g = await G.gemOnce({key:gemKey(), model, search:true, maxTokens:1200, onRetry:gemRetryNote,
+          prompt:`Suche im Web: ${q}\nNenne die besten Treffer (höchstens 6) je mit Name, kurzer Info (Adresse/Öffnungszeiten/Preis, falls passend) und der OFFIZIELLEN Website als vollständige URL. Deutsch, knapp. Heute ist ${new Date().toLocaleDateString('de-CH')}.`});
+        gemCount(model); liveResearch({json:JSON.stringify({query:q})}, g.sources.map(x => ({url:x.url, title:x.titel})));
+        return {gesucht_mit:'Google-Suche (über die KI, ohne Robotertest)', treffer:g.text || '(nichts gefunden)', quellen:g.sources.slice(0, 8), weiter:'Öffne jetzt die passende Website direkt mit pc_browser öffnen (url) – nicht google.com.'};
+      }
+      const stepLabel = {suchen:'Suche ' + (args.anfrage || ''), warten_auf_mensch:'Warte auf dich (Robotertest)', öffnen:'Öffne ' + (args.url || ''), lesen:'Lese Seite', klicken:'Klicke ' + (args.id || ''), tippen:'Tippe in ' + (args.id || ''), auswählen:'Wähle ' + (args.wert || ''), scrollen:'Scrolle', zurück:'Zurück', screenshot:'Screenshot', status:'Status'}[aktion] || aktion;
       const live = (d) => (wm.has('browser') ? wm.update('browser', d) : wm.open({id:'browser', type:'browserlive', title:'BROWSER · LIVE', size:'m', data:d})).catch(() => {});
       await live({schritt:{a:stepLabel, st:'run'}});
       let r;
-      try{ r = await agentCall(aktion, args); }
+      try{ r = await agentCall(aktion, args, aktion === 'warten_auf_mensch' ? 320e3 : 60e3); }
       catch(e){ let msg = e.message; try{ msg = JSON.parse(e.message).fehler || msg; }catch{} await live({schritt:{a:stepLabel, st:'err', t:msg}}); throw e; }
+      if (r?.mensch_nötig){
+        await live({url:r.url, titel:r.titel, schritt:{a:stepLabel, st:'lock', t:'Robotertest – bitte selbst im Browserfenster anklicken'}});
+        sysLine('🤖 <b>Robotertest</b> auf ' + esc(r.url || 'der Seite') + ' – das darf nur ein Mensch lösen. Bitte im Browserfenster des PC-Agents kurz anklicken, JARVIS wartet.');
+        if (cfg.speak) speak('Kurz du bitte: Im Browserfenster ist ein Robotertest. Klick ihn an, ich warte.');
+        r = {...r, hinweis:'Robotertest/Captcha – NIE selbst lösen oder umgehen. Der Nutzer wurde schon gebeten, ihn im Browserfenster anzuklicken. Rufe jetzt pc_browser warten_auf_mensch auf; klappt es nicht, nimm einen anderen Weg (suchen, andere Website).'};
+      }
       if (r?.bestätigung_nötig) await live({schritt:{a:stepLabel, st:'lock', t:'Wartet auf deine Bestätigung: ' + (r.element || '')}});
       else await live({url:r?.url, titel:r?.titel, bild:r?.bild, schritt:{a:stepLabel, st:'ok', t:r?.titel || ''}});
       if (r?.bestätigung_nötig){
@@ -1752,6 +1803,39 @@ Object.assign(tools, {
         r.elemente = r.elemente?.map(e => ({...e, href: e.href?.slice(0, 80)}));
       }
       return JSON.stringify(r);
+    }
+  },
+  pc_dateien: {
+    label:'DATEIEN AM PC',
+    def:{description:'ECHTER Zugriff auf die Dateien des Laptops über den JARVIS PC-Agent (nur wenn verbunden): ganzer Benutzerordner inkl. Downloads, Desktop, Dokumente, Bilder, OneDrive, alle Unterordner, weitere Laufwerke/USB-Sticks – beliebig viele Dateien (der Browser allein darf Downloads/Desktop/Dokumente nicht freigeben). Aktionen: ordner (bekannte Ordner und Pfade), liste {pfad, tief}, suchen {muster, pfad?} (findet Dateien/Ordner im ganzen Benutzerordner), sortieren {pfad, nach:"typ"|"jahr"|"monat", regeln?:{"Ordnername":["ext",…]}, vorschau?}, verschieben {quellen[], ziel}, umbenennen {pfad, neuer_name}, ordner_erstellen {pfad}, lesen {pfad} (Text, Word, PowerPoint – zum Zusammenfassen/Lernen), öffnen {pfad} oder {url} (mit dem passenden Programm am PC), löschen {pfade[]} (nur in den JARVIS-Papierkorb, der Nutzer bestätigt IMMER selbst), rückgängig (letzte Aktion). Pfade: "Downloads", "Desktop/Schule", "Dokumente/…", "~/…" oder absolut (D:\\…). Sortieren/Verschieben/Umbenennen sind umkehrbar → einfach machen und danach kurz sagen, was passiert ist und dass „rückgängig“ geht. Unterordner und Verknüpfungen bleiben beim Sortieren, wo sie sind. Sag nie, du hättest keinen Zugriff, solange der PC-Agent verbunden ist.',
+      input_schema:S({aktion:{type:'string', enum:['ordner','liste','suchen','sortieren','verschieben','umbenennen','ordner_erstellen','lesen','öffnen','löschen','rückgängig']}, pfad:{type:'string'}, pfade:{type:'array', items:{type:'string'}}, quellen:{type:'array', items:{type:'string'}}, ziel:{type:'string'}, muster:{type:'string'}, nach:{type:'string', enum:['typ','jahr','monat']}, regeln:{type:'object'}, vorschau:{type:'boolean'}, tief:{type:'boolean'}, neuer_name:{type:'string'}, url:{type:'string'}}, ['aktion'])},
+    async run(i){
+      const {aktion, ...args} = i;
+      if (!(agentWs && agentWs.readyState === 1)) throw new Error('PC-Agent nicht verbunden – Dateien am Laptop gehen nur mit ihm. Am Laptop: Einstellungen → PC-Agent → „PC-Agent herunterladen“, entpacken, Doppelklick auf PC-Agent-starten.cmd (keine Admin-Rechte nötig), Token eintragen.');
+      const long = ['liste','suchen','sortieren','verschieben','rückgängig','löschen'].includes(aktion) ? 300e3 : 60e3;
+      if (aktion === 'sortieren' && !args.vorschau){
+        const l = await agentCall('datei:liste', {pfad:args.pfad || 'Downloads', namen:true}, long);
+        const ordner = String(l.ordner).split(/[\\/]/).pop() || 'Ordner';
+        if (!wm.has('dateien')) await openSorter({dateien:[], ordner});
+        await wm.update('dateien', {dateien:l._namen || [], ordner, kategorieVon:f => categorize(f.name, args.regeln && Object.keys(args.regeln).length ? args.regeln : CAT_RULES)});   // thumbnails + cloud
+        wm.setStatus('dateien', {status:'PC-AGENT · SORTIERT', progress:5});
+        const r = await agentCall('datei:sortieren', args, long);
+        await wm.act('dateien', 'kategorien', {liste:Object.entries(r.je_ordner || {}).map(([name, anzahl]) => ({name, anzahl}))});
+        for (const [datei, kategorie] of r._log || []) wm.act('dateien', 'verschoben', {datei, kategorie, ok:true});   // the agent verified every move in the real file system
+        await wm.act('dateien', 'fertig', {text:`${(r.verschoben_und_geprüft || 0).toLocaleString('de-CH')} DATEIEN VERSCHOBEN & GEPRÜFT IN ${Math.max(0.1, +r.sekunden || 0).toFixed(1)} S${r.fehler_anzahl ? ' · ' + r.fehler_anzahl + ' FEHLER' : ''}`, titel:r.fehler_anzahl ? '' : 'ERLEDIGT'});
+        wm.setStatus('dateien', {status:`${r.verschoben_und_geprüft} DATEIEN · GEPRÜFT`, progress:100});
+        delete r._log; return r;
+      }
+      let r = await agentCall('datei:' + aktion, args, long);
+      if (r?.bestätigung_nötig){
+        const ok = await requireApproval({art: aktion === 'löschen' ? 'JARVIS möchte Dateien LÖSCHEN (sie kommen in den Ordner „JARVIS-Papierkorb“ – rückgängig möglich).' : 'JARVIS möchte ein PROGRAMM bzw. Skript auf deinem PC starten.', was:r.element, wo:'Dateien am PC', key:'datei:' + r.element});
+        if (!ok) return {abgebrochen:true, grund:'Der Nutzer hat NICHT bestätigt. Nichts wurde gelöscht/gestartet.'};
+        r = await agentCall('datei:' + aktion, {...args, bestätigung:r.code}, long);
+        if (r?.bestätigung_nötig) throw new Error('Bestätigung abgelaufen – nichts ausgeführt.');
+        r = {vom_nutzer_bestätigt:true, ...r};
+      }
+      if (r && typeof r === 'object'){ delete r._namen; delete r._log; if (r.text?.length > 12000) r.text = r.text.slice(0, 12000) + ' …[gekürzt]'; }
+      return r;
     }
   },
   ui: {
@@ -1861,9 +1945,10 @@ Alle: daten.status (Badge), daten.progress (0–100).`,
   },
   files: {
     label:'DATEI-SYSTEM',
-    def:{description:'Echte Dateiorganisation in einem freigegebenen Ordner (Chrome/Edge am PC) mit grosser Live-3D-Ansicht: Dateien als Miniaturen, die erst in ihre Kategorie fliegen, wenn die echte Verschiebung geprüft ist. Ablauf: ordner_anfordern → Nutzer gibt frei (UI-Ereignis mit Zusammenfassung) → auto_sortieren (schnell, nach Dateityp; optional regeln {"Kategorie":["ext",…]}) ODER organisieren mit plan {"Kategorie":["datei",…]} für inhaltliche Sortierung kleiner Mengen. rückgängig macht die letzte Sortierung ungeschehen.',
+    def:{description:'(Ist der PC-Agent verbunden, nimm stattdessen pc_dateien – der kann viel mehr.) Echte Dateiorganisation in einem freigegebenen Ordner (Chrome/Edge am PC; Downloads/Desktop/Dokumente selbst sperrt der Browser, nur deren Unterordner, und nur Dateien direkt im Ordner) mit grosser Live-3D-Ansicht: Dateien als Miniaturen, die erst in ihre Kategorie fliegen, wenn die echte Verschiebung geprüft ist. Ablauf: ordner_anfordern → Nutzer gibt frei (UI-Ereignis mit Zusammenfassung) → auto_sortieren (schnell, nach Dateityp; optional regeln {"Kategorie":["ext",…]}) ODER organisieren mit plan {"Kategorie":["datei",…]} für inhaltliche Sortierung kleiner Mengen. rückgängig macht die letzte Sortierung ungeschehen.',
       input_schema:S({aktion:{type:'string', enum:['ordner_anfordern','scannen','auto_sortieren','organisieren','rückgängig']}, plan:{type:'object'}, regeln:{type:'object'}}, ['aktion'])},
     async run(i){
+      if (i.aktion === 'ordner_anfordern' && agentWs && agentWs.readyState === 1) return {hinweis:'Der PC-Agent ist verbunden → nimm pc_dateien: ganzer Benutzerordner (auch Downloads, Desktop, Dokumente und Unterordner), ohne Freigabe-Dialog und ohne Browser-Sperre.'};
       if (i.aktion === 'ordner_anfordern'){
         const ok = 'showDirectoryPicker' in window;
         await openSorter({phase:'pick', supported:ok, hinweis: ok ? undefined : 'Dieser Browser (z.B. Chrome auf Android) erlaubt Web-Apps keinen Ordnerzugriff. Öffne JARVIS am PC in Chrome oder Edge.', status: ok ? 'WARTE AUF FREIGABE' : 'NICHT UNTERSTÜTZT'});
@@ -2181,11 +2266,11 @@ function freiheitPrompt(){
 }
 // 5.7: the parts that can change during a conversation – sent as an appended system note instead of editing the system prompt
 function dynamicPrompt(){
-  return `${personaPrompt()}\n\n${freiheitPrompt()}\n\nKontaktregeln des Nutzers: ${cfg.rules || '(keine)'} · Anrufe erlaubt: ${cfg.allowCall ? 'ja' : 'nein'} · Push: ${cfg.ntfy ? 'ja' : 'nein'}\n\nWas du über den Nutzer weisst:\n${memory.length ? memory.map(m => `- ${m.text} (id ${m.id})`).join('\n') : '- (noch nichts gespeichert)'}`;
+  return `${personaPrompt()}\n\n${freiheitPrompt()}\n\n${profilPrompt()}\n\nKontaktregeln des Nutzers: ${cfg.rules || '(keine)'} · Anrufe erlaubt: ${cfg.allowCall ? 'ja' : 'nein'} · Push: ${cfg.ntfy ? 'ja' : 'nein'}\n\nWas du über den Nutzer weisst:\n${memory.length ? memory.map(m => `- ${m.text} (id ${m.id})`).join('\n') : '- (noch nichts gespeichert)'}`;
 }
 let convSystem = null, convDyn = null, convLite = false;   // snapshot per conversation: system prompt stays byte-identical (cache + thinking blocks stay valid)
 // 5.8 light mode for very slow lines: short instructions + core tools (≈ 70 % less upload per message), decided per conversation
-const LITE_TOOLS = ['get_weather','get_location','get_device_status','open_app','set_timer','manage_timers','notes','calendar','memory','contact_user','watchers','routinen','agenten_buero','telefonat','rueckmeldung','hoerfehler','flashlight','clipboard','share','vibrate','device_control'];
+const LITE_TOOLS = ['get_weather','get_location','get_device_status','open_app','set_timer','manage_timers','notes','calendar','memory','steckbrief','contact_user','watchers','routinen','agenten_buero','telefonat','rueckmeldung','hoerfehler','flashlight','clipboard','share','vibrate','device_control'];
 const liteWanted = () => cfg.netMode === 'leicht' || (cfg.netMode !== 'voll' && slowNet());
 function syncConversationPrompt(){
   const last = history.at(-1);
@@ -2219,7 +2304,7 @@ function systemPromptLite(){
 LEICHT-MODUS – der Nutzer hat gerade ein sehr langsames Netz: antworte kurz und direkt, ohne Fenster oder 3D. Handle selbstständig mit deinen Werkzeugen:
 - Aktuelles → web_search, eine konkrete Seite → web_fetch. Wetter → get_weather. Standort → get_location. Akku/Uhrzeit/Netz → get_device_status.
 - Anrufen, SMS, WhatsApp, Mail, Navigation, Musik → open_app (Nachrichten fertig formulieren, senden tippt der Nutzer). Timer/Wecker/Erinnerung → set_timer.
-- Persönliches merken → memory. Listen/To-dos → notes. Termine → calendar. „Sag mir, wenn …“ → watchers. „Jeden Tag um …“ → routinen. Bei Dritten anrufen → telefonat. Den Nutzer erreichen → contact_user.
+- Persönliches: feste Angaben (Adresse, Schule, Geburtstag, Familie, Vorlieben) → steckbrief, sonstiges → memory. Listen/To-dos → notes. Termine → calendar. „Sag mir, wenn …“ → watchers. „Jeden Tag um …“ → routinen. Bei Dritten anrufen → telefonat. Den Nutzer erreichen → contact_user.
 - Korrigiert der Nutzer eine falsch gehörte Spracheingabe → hoerfehler.
 
 ${freiheitPrompt()}
@@ -2227,6 +2312,8 @@ ${freiheitPrompt()}
 
 Jede Nutzernachricht beginnt mit [Lokalzeit …] und ggf. weiteren Hinweisen in eckigen Klammern – nutze sie, erwähne sie aber nicht.
 Kontaktregeln des Nutzers: ${cfg.rules || '(keine – nachts nur bei Notfällen)'} · Anrufe erlaubt: ${cfg.allowCall ? 'ja' : 'nein'}
+
+${profilPrompt()}
 
 Was du über den Nutzer weisst:
 ${memory.length ? memory.map(m => `- ${m.text} (id ${m.id})`).join('\n') : '- (noch nichts gespeichert)'}`;
@@ -2262,7 +2349,7 @@ Du hast ein eigenes visuelles Interface (Werkzeug ui) mit Live-3D und darfst es 
 - Zahlen, Vergleiche, Trends, Analysen → chart oder dashboard ; Recherche-Ergebnisse → dashboard/info als Abschluss-Präsentation
 - Mehrstufige Aufgaben → tasks; aktualisiere jeden Schritt ehrlich (running → done/error)
 - Auswahl, Angebote, Buchungsvorbereitung → options (Status "VORBEREITET · NICHT GEBUCHT")
-- Termine → calendar-Werkzeug ; Dateien ordnen → files-Werkzeug ; Websites bedienen (Reservieren, Bestellen vorbereiten, Formulare) → pc_browser (nur wenn PC-Agent verbunden; sonst ehrlich sagen, wie man ihn bekommt: Einstellungen → PC-Agent → „PC-Agent herunterladen“, entpacken, Doppelklick – keine Admin-Rechte nötig – und den Link öffnen)
+- Termine → calendar-Werkzeug ; Dateien ordnen → files-Werkzeug ; Dateien am Laptop (sortieren, suchen, lesen, öffnen, aufräumen – auch Downloads/Desktop/Dokumente) → pc_dateien (wenn PC-Agent verbunden, sonst files) ; Persönliches über den Nutzer (Adresse, Schule, Geburtstag, Familie, Vorlieben) → steckbrief setzen ; Websites bedienen (Reservieren, Bestellen vorbereiten, Formulare) → pc_browser (nur wenn PC-Agent verbunden; sonst ehrlich sagen, wie man ihn bekommt: Einstellungen → PC-Agent → „PC-Agent herunterladen“, entpacken, Doppelklick – keine Admin-Rechte nötig – und den Link öffnen)
 Ein [Visual-Planer: …]-Hinweis in der Nutzernachricht ist eine Empfehlung deines Planungsmoduls – folge ihr in der Regel. Bei Rückfragen verwendest du offene Fenster weiter (Befehle, patch, aktualisieren) statt neu anzufangen. Halte die Oberfläche aufgeräumt: maximal ~3 Fenster, aktualisiere bestehende Fenster statt neue zu öffnen, schliesse Veraltetes selbst. Auf grossen Bildschirmen ordnen sich Fenster automatisch an (das fokussierte bekommt den grössten Platz); mit aktion verschieben kannst du eines gezielt platzieren (links/rechts/oben/unten/mitte), mit fokus nach vorne holen.
 
 ## Live-Visualisierung echter Arbeit (Grundprinzip)
@@ -2290,6 +2377,8 @@ Kontaktregeln des Nutzers: ${cfg.rules || '(keine – nutze gesunden Menschenver
 Anrufe erlaubt: ${cfg.allowCall ? 'ja' : 'nein'} · Push eingerichtet: ${cfg.ntfy ? 'ja' : 'nein'}
 
 Jede Nutzernachricht beginnt mit einem Zeitstempel [Lokalzeit …] und ggf. [Offene Fenster …] / [Systemhinweise …] – nutze sie, erwähne sie aber nicht.
+
+${profilPrompt()}
 
 Was du über den Nutzer weisst:
 ${memory.length ? memory.map(m => `- ${m.text} (id ${m.id})`).join('\n') : '- (noch nichts gespeichert)'}`;
@@ -2328,6 +2417,7 @@ async function handleInput(text, imageDataUrl, opts = {}){
   const content = [];
   if (imageDataUrl) content.push({type:'image', source:{type:'base64', media_type:'image/jpeg', data:imageDataUrl.split(',')[1]}});
   const open = wm.list(); let ctxLines = '';
+  if (agentWs && agentWs.readyState === 1) ctxLines += '\n[PC-Agent verbunden: du hast ECHTEN Zugriff auf die Dateien dieses Laptops (pc_dateien – ganzer Benutzerordner inkl. Downloads, Desktop, Dokumente, Unterordner) und einen Browser (pc_browser). Nutze sie, statt zu sagen, dass du keinen Zugriff hast.]';   // 5.9.4
   if (open.length) ctxLines += `\n[Offene Fenster: ${open.map(w => `${w.id} (${w.typ}${w.fokus ? ', im Fokus' : ''}${w.meta ? ', ' + JSON.stringify(w.meta).slice(0, 600) : ''})`).join(' ; ')}]`;
   if (!opts.silent && text && !opts.noPlan){
     setState('think'); const plan = await planVisual(text); ctxLines += planNote(plan, text);
@@ -2569,6 +2659,7 @@ function readSettings(){
     ntfy:$('#cfgNtfy').value.trim(), tg:$('#cfgTg').value.trim(), allowCall:$('#cfgCall').checked, rules:$('#cfgRules').value.trim()});
   const wasHand = cfg.handCtl;
   document.querySelectorAll('#settings [data-k]').forEach(el => { cfg[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value.trim(); });   // 5.2 fields
+  if (document.querySelector('#profilFields [data-p]')){ cfg.profil = {}; document.querySelectorAll('#profilFields [data-p]').forEach(el => { if (el.value.trim()) cfg.profil[el.dataset.p] = el.value.trim().slice(0, 400); }); }   // 5.9.4
   store.set('cfg', cfg); applyTheme(); if (wasHand && !cfg.handCtl){ handManualUntil = 0; stopHands(); }   // 5.9: switching on only allows it – the camera starts when a 3D model is open
 }
 function renderLists(){
@@ -2581,7 +2672,7 @@ function renderLists(){
   { const fl = document.getElementById('fixList'); if (fl) mk(sttFix, fl, f => `„${esc(f.falsch)}“ → „${esc(f.richtig)}“`, f => { sttFix = sttFix.filter(x => x !== f); store.set('sttFix', sttFix); renderLists(); }); }
   { const dl = document.getElementById('decList'); if (dl) dl.innerHTML = decisions.length ? decisions.slice(-15).reverse().map(d => `<div class="memitem"><span><b>${d.wer === 'JARVIS' ? '🧠 JARVIS' : '👤 du'}</b> · ${esc(new Date(d.ts).toLocaleString('de-CH', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}))}<br><span class="hint">${esc(d.was || '')}${d.warum ? ' – ' + esc(d.warum) : ''}${d.ok === false ? ' (abgelehnt)' : ''}</span></span></div>`).join('') : '<p class="hint">Noch nichts.</p>'; }
 }
-function openSettings(){ fillSettings(); $('#settings').classList.add('open'); }
+function openSettings(){ fillSettings(); fillProfil(); $('#settings').classList.add('open'); }
 function fillGemNow(){   // 5.8: what Gemini does today (free – counted on this device)
   const e = document.getElementById('gemNow'); if (!e) return;
   const u = gemUseToday(), n = Object.values(u.n).reduce((a, b) => a + b, 0);
@@ -3205,6 +3296,7 @@ $('#unlockAll').onclick = async () => {
 for (const id of ['kFiles', 'kFolder']) $('#' + id).onchange = async (e) => { const n = await kImport([...e.target.files]); toast(`📚 ${n} Dateien eingelesen – ${kIndex?.N || 0} Abschnitte durchsuchbar.`); e.target.value = ''; };
 $('#kClear').onclick = async () => { if (!confirm('Wissensordner auf diesem Gerät leeren?')) return; const root = await navigator.storage.getDirectory(); await root.removeEntry('wissen', {recursive:true}).catch(() => {}); await kBuild(); toast('Wissensordner geleert.'); };
 $('#testSrv').onclick = async () => { readSettings(); try{ const r = await refreshSrvInfo() || await srv('/api/status'); toast(`Server OK · Telefon: ${r.twilio ? 'eingerichtet' : 'nicht eingerichtet'} · Wächter: ${r.wächter} · Server-KI: ${r.ki === 'gemini' ? 'Gemini (gratis)' : (r.ki_kosten_monat_usd || 0).toFixed(2) + ' USD'} · Telefon diesen Monat: ${(r.telefon_kosten_monat_usd || 0).toFixed(2)} $ · letzter Cron: ${r.heartbeat ? new Date(r.heartbeat.ts).toLocaleString('de-CH') : 'noch nie'}`); syncWatchersToServer(); }catch(e){ toast('Server: ' + e.message); } };
+$('#kennenlernen').onclick = () => { readSettings(); closeSettings(); handleInput('Lern mich kennen: Stell mir nacheinander ein paar kurze, lockere Fragen (eine pro Nachricht) – Wohnadresse, Schule oder Arbeit, Geburtstag, wichtige Personen, Vorlieben, Allergien und wobei du mir am meisten helfen sollst. Speichere jede Antwort sofort im Steckbrief. Frag nur, was noch fehlt.'); };
 $('#connectAgent').onclick = () => { readSettings(); if (agentWs) agentWs.close(); agentWs = null; agentConnect(); };
 $('#testPush').onclick = async () => { readSettings(); const r = await contactUser({stufe:'push', titel:'J.A.R.V.I.S.', nachricht:'Test-Push: Verbindung steht.'}); toast('Push: ' + (r.push || '—')); };
 $('#pHumor').oninput = e => $('#pHumorVal').textContent = ['aus','selten','gelegentlich','oft'][e.target.value];

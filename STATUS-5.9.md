@@ -119,3 +119,41 @@ das kurz. Sind alle überlastet: deutsche Meldung „Google ist gerade überlast
 **Ungetestet (⚪):** Die Windows-Dateien (`.cmd`, PowerShell) konnten hier nicht laufen – es gibt in dieser Umgebung kein Windows.
 Sie machen dasselbe wie der getestete Mac/Linux-Starter. Auf Schul-/Firmen-Laptops kann die IT Programme aus dem Download-Ordner,
 PowerShell oder die Fernsteuerung von Edge sperren – dann erscheint eine Meldung, lösen kann das nur die IT.
+
+## 5.9.4 – Mehr Assistent: Dateien am PC, Robotertests, Steckbrief
+Deine Rückmeldung: „Er darf nichts – bei Google kommt ein Robotertest, ich kann ihm nur einen winzigen Teil meines Ordners zum
+Sortieren geben, und er ist Gemini, also Google – wieso weiss er nichts über mich, z.B. meine Adresse?“
+
+**Die Ursachen (ehrlich):**
+| Problem | Ursache |
+|---|---|
+| Nur ein winziger Teil des Ordners | Der **Browser** (Chrome/Edge) erlaubt Web-Apps **nicht**, Downloads, Desktop oder Dokumente selbst freizugeben – nur Unterordner. Und JARVIS sah nur Dateien direkt im Ordner, keine Unterordner. |
+| Robotertest bei Google | **Alle** Suchmaschinen (Google, DuckDuckGo, Bing) zeigen ferngesteuerten Browsern Robotertests – hier nachgeprüft: DuckDuckGo „Select all squares containing a duck“, Bing leere Ergebnisse. |
+| Weiss nichts über dich | Der Gemini-Key ist nur das **Gehirn**. Er ist **nicht** mit deinem Google-Konto verbunden – Google gibt Apps über diesen Key keine Adresse, Mails oder Kontakte. |
+
+**Die Lösungen:**
+| Was | Wie | Kategorie |
+|---|---|---|
+| 📁 Dateien am PC | Der PC-Agent darf jetzt im **ganzen Benutzerordner** arbeiten (Downloads, Desktop, Dokumente, Bilder, OneDrive, alle Unterordner, beliebig viele Dateien) und auf weiteren Laufwerken/USB-Sticks: sortieren (Typ/Jahr/Monat/eigene Regeln), suchen, verschieben, umbenennen, Ordner anlegen, **Word/PowerPoint/Text lesen**, mit dem passenden Programm öffnen. Jede Verschiebung wird geprüft, alles ist **rückgängig** machbar. **Löschen** geht nur in den Ordner „JARVIS-Papierkorb“ und fragt **immer**; **Programme starten** fragt immer. Nie in System-, Programm- oder versteckten Ordnern. | ✅ |
+| 🔎 Suchen ohne Robotertest | JARVIS sucht über die **Google-Suche der KI-Schnittstelle** (offiziell, ohne Robotertest) und öffnet danach die Website direkt. Ruft er doch google.com auf, leitet der Agent um. | ✅ Ablauf · 🟡 KI |
+| 🤖 Kommt doch ein Robotertest | Wird erkannt (Google „ungewöhnlicher Datenverkehr“, reCAPTCHA, hCaptcha, Cloudflare, „Ich bin kein Roboter“). JARVIS löst ihn **nie selbst**: Browserfenster kommt nach vorne, JARVIS bittet dich kurz zu klicken und wartet bis 5 Min. | ✅ |
+| 📇 Steckbrief „Über dich“ | Adresse, Schule/Arbeit, Geburtstag, wichtige Personen, Vorlieben, Gesundheit, Ziele. JARVIS speichert es **selbst**, sobald du es erwähnst, nutzt es immer („nach Hause“, Geburtstage, Allergien) und fragt ab und zu nach, was fehlt. Einstellungen → „🤝 Kennenlernen“: JARVIS fragt dich der Reihe nach. | ✅ Ablauf · 🟡 KI |
+| 🔑 Fester Token | Der PC-Agent behält seinen Token (`token.txt`) → nur einmal eintragen; JARVIS verbindet sich nach einem Neustart selbst (alle 8 s Versuch). | ✅ |
+| 💡 JARVIS weiss, was er darf | Ist der PC-Agent verbunden, steht in jeder Anfrage: „Du hast echten Zugriff auf Dateien und Browser – nutze sie, statt zu sagen, dass du keinen Zugriff hast.“ | ✅ |
+
+**Update des PC-Agents:** In JARVIS → Einstellungen → PC-AGENT neu herunterladen, in denselben Ordner entpacken (Dateien ersetzen),
+`PC-Agent-starten.cmd` neu starten, Token einmal neu eintragen.
+
+**Tests 5.9.4**
+| Test | Ergebnis |
+|---|---|
+| PC-Agent Dateien (echtes Dateisystem, Test-Benutzerordner mit OneDrive-Ordnern): bekannte Ordner, ganzer Downloads-Ordner inkl. Unterordner, Vorschau ändert nichts, Sortieren mit Prüfung (Verknüpfungen/Systemdateien/halbe Downloads/Unterordner bleiben, Namenskonflikt → „foto (2).jpg“), Rückgängig, nach Jahr, Suchen, Word/PowerPoint/Text lesen, Verschieben/Umbenennen, Löschen nur mit Code (falscher Code und Code einer anderen Datei reichen nicht) und nur in den JARVIS-Papierkorb, Programme fragen, Grenzen (/etc, .ssh, AppData, ../ heraus, /usr/bin), Robotertest-Erkennung + Warten auf den Menschen, Token bleibt gleich | **14/14** |
+| App + echter PC-Agent (D1): „Räum meine Downloads auf“ → echt sortiert und geprüft, Live-Fenster mit Vorschaubildern, „Lösch …“ → Freigabe-Dialog, abgelehnt → nichts gelöscht, „rückgängig“ → alles zurück | ✅ |
+| App + echter PC-Agent (D2): Suchen über die Google-Suche der KI, Robotertest erkannt → Hinweis an dich, JARVIS wartet, nach deinem Klick geht es weiter | ✅ |
+| Steckbrief (S2): JARVIS speichert Adresse/Vorlieben selbst, kennt sie in der nächsten Frage, Einstellungen zeigen und ändern sie, „Kennenlernen“ | ✅ |
+| Echte Suchmaschinen aus dieser Umgebung | DuckDuckGo: Enten-Robotertest, Bing: leere Seite – Grund für den Weg über die KI-Suche |
+| Gesamt | Gemini-Übersetzer **9/9** · Server **31/31** · 5.9 im Browser **16/16** · 5.8 im Browser **20/20** · PC-Agent Reservierung **9/9** · alte Regression **38/39** (der rote Test fragt das echte Wetter bei Open-Meteo ab: wieder HTTP 429 „zu viele Anfragen“ von dieser geteilten IP – extern) |
+
+**Ungetestet (⚪):** echte KI-Antworten (ob Gemini die neuen Werkzeuge immer klug wählt), dein echter Windows-Laptop mit OneDrive
+(die Pfade sind nachgebaut getestet), echte Suchmaschinen von deiner Leitung aus. Nicht gebaut: Zugriff auf dein Google-Konto
+(Gmail, Kalender, Kontakte) – das ginge mit einer einmaligen Einrichtung bei Google (gratis, ohne Karte, ca. 10 Minuten).

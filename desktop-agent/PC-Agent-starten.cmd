@@ -33,7 +33,7 @@ if errorlevel 1 goto fehler
 echo ok> "%~dp0.bereit"
 :start
 echo.
-echo Den angezeigten Token in JARVIS unter Einstellungen - PC-Agent eintragen. Dieses Fenster offen lassen.
+echo Den angezeigten Token EINMAL in JARVIS unter Einstellungen - PC-Agent eintragen (bleibt gleich). Dieses Fenster offen lassen.
 call npm start
 pause
 exit /b 0

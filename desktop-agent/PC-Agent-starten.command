@@ -20,5 +20,5 @@ if [ ! -f .bereit ]; then
   npm install --no-audit --no-fund || { echo "Hat nicht geklappt (Schul-/Firmengerät? Dann IT fragen)."; read -r; exit 1; }
   echo ok > .bereit
 fi
-echo; echo "Den angezeigten Token in JARVIS unter Einstellungen → PC-Agent eintragen. Dieses Fenster offen lassen."
+echo; echo "Den angezeigten Token EINMAL in JARVIS unter Einstellungen → PC-Agent eintragen (bleibt gleich). Dieses Fenster offen lassen."
 npm start

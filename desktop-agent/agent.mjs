@@ -12,11 +12,14 @@ import { chromium } from 'playwright';
 import { WebSocketServer } from 'ws';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { FILE_ACTIONS, needsConfirm } from './dateien.mjs';
 
 const PORT = +(process.env.JARVIS_AGENT_PORT || 47321);
-const TOKEN = process.env.JARVIS_AGENT_TOKEN || crypto.randomBytes(9).toString('base64url');
+// 5.9.4: the token is kept in token.txt → after a restart JARVIS reconnects by itself (no new token to type in)
+const TOKEN_FILE = fileURLToPath(new URL('./token.txt', import.meta.url));
+const TOKEN = process.env.JARVIS_AGENT_TOKEN || (() => { try { const t = readFileSync(TOKEN_FILE, 'utf8').trim(); if (t.length >= 12) return t; } catch {} const t = crypto.randomBytes(9).toString('base64url'); try { writeFileSync(TOKEN_FILE, t); } catch {} return t; })();
 const HEADLESS = process.env.HEADLESS === '1';
 const CHECKOUT_PAGE = /(checkout|kasse|payment|zahlung|bezahl|order|bestell|booking|book|buchung|reserv|table|tisch|termin|appointment)/i;
 const CONFIRM_WORDS = /(finish|complete|confirm|place|pay|abschlie|bestätig|weiter zur zahlung|jetzt|fertig)/i;
@@ -107,8 +110,26 @@ async function readOnce() {
       data.elemente.push(...d.elemente.map((x) => ({ ...x, rahmen: host })));
     } catch {}
   }
+  const robot = await robotCheck(data);
+  if (robot) { data.mensch_nötig = robot; await page.bringToFront().catch(() => {}); }
   return data;
 }
+// 5.9.4: robot tests (Google "unusual traffic", reCAPTCHA, hCaptcha, Cloudflare) are for humans – JARVIS never tries to solve them.
+// The agent brings the window to the front and JARVIS asks the user to click it himself (warten_auf_mensch).
+const CAPTCHA_FRAME = /(recaptcha\/(api2|enterprise)\/(anchor|bframe)|hcaptcha\.com\/captcha|challenges\.cloudflare\.com|captcha-delivery\.com|arkoselabs|funcaptcha)/i;
+const CAPTCHA_TEXT = /(unusual traffic from your computer|ungewöhnliche[nr]? datenverkehr|i'?m not a robot|ich bin kein roboter|verify (that )?you are (a )?human|bestätigen sie, dass sie ein mensch sind|confirm you are human|are you a robot|bist du ein roboter|press (&|and) hold|checking your browser|überprüfung ihres browsers)/i;
+async function robotCheck(data) {
+  try {
+    if (/google\.[a-z.]+\/sorry\//i.test(page.url())) return 'Google-Robotertest';
+    for (const f of page.frames()) {
+      if (f === page.mainFrame() || !CAPTCHA_FRAME.test(f.url()) || /size=invisible/.test(f.url())) continue;
+      const box = await (await f.frameElement()).boundingBox().catch(() => null); if (box && box.width > 60 && box.height > 60) return 'Robotertest (' + new URL(f.url()).host + ')';
+    }
+    if (CAPTCHA_TEXT.test(data.text.slice(0, 3000)) && data.text.length < 4000) return 'Robotertest auf der Seite';
+  } catch {}
+  return null;
+}
+const SEARCH_URL = (q) => 'https://html.duckduckgo.com/html/?kl=ch-de&q=' + encodeURIComponent(q);
 async function el(id) {
   for (const f of page.frames()) { const h = f.locator(`[data-jv="${id}"]`).first(); if (await h.count().catch(() => 0)) return h; }
   throw new Error(`Element ${id} nicht gefunden – zuerst "lesen" aufrufen`);
@@ -132,7 +153,25 @@ async function guard(action, args) {
 }
 
 const handlers = {
-  async öffnen({ url }) { if (!/^https?:\/\//.test(url)) url = 'https://' + url; await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }); await page.waitForLoadState('load', { timeout: 5000 }).catch(() => {}); await page.waitForTimeout(600); return await read(); },
+  async suchen({ anfrage, text }) {
+    const q = String(anfrage || text || '').trim(); if (!q) throw new Error('anfrage fehlt');
+    await page.goto(SEARCH_URL(q), { waitUntil: 'domcontentloaded', timeout: 30000 }); await page.waitForTimeout(500);
+    let d = await read();
+    if (d.mensch_nötig || /anomaly|unusual|bots use duckduckgo/i.test(d.text.slice(0, 1500))) {   // fallback: Bing
+      await page.goto('https://www.bing.com/search?setlang=de&cc=CH&q=' + encodeURIComponent(q), { waitUntil: 'domcontentloaded', timeout: 30000 }); await page.waitForTimeout(800); d = await read();
+    }
+    return { suchmaschine: new URL(page.url()).host, ...d };
+  },
+  async warten_auf_mensch({ sekunden = 120 }) {
+    await page.bringToFront().catch(() => {});
+    const until = Date.now() + Math.min(300, Math.max(10, +sekunden || 120)) * 1000;
+    while (Date.now() < until) { await page.waitForTimeout(2000); const d = await read().catch(() => null); if (d && !d.mensch_nötig) return { gelöst: true, ...d }; }
+    return { gelöst: false, hinweis: 'Der Robotertest ist noch da. Nicht selbst lösen – den Nutzer nochmal bitten oder einen anderen Weg nehmen (web_search, andere Seite).' };
+  },
+  async öffnen({ url }) { if (!/^https?:\/\//.test(url)) url = 'https://' + url;
+    // 5.9.4: Google search in a remote-controlled browser triggers robot tests → same search on DuckDuckGo instead
+    try { const u = new URL(url); if (/(^|\.)google\.[a-z.]+$/i.test(u.hostname) && /^\/(search|webhp)?$/.test(u.pathname) && u.searchParams.get('q')) return { umgeleitet: 'Google-Suche → DuckDuckGo (Google zeigt ferngesteuerten Browsern Robotertests)', ...(await handlers.suchen({ anfrage: u.searchParams.get('q') })) }; } catch {}
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }); await page.waitForLoadState('load', { timeout: 5000 }).catch(() => {}); await page.waitForTimeout(600); return await read(); },
   async lesen() { return await read(); },
   async klicken({ id }) { const h = await el(id); await h.scrollIntoViewIfNeeded({ timeout: 5000 }); await Promise.all([page.waitForLoadState('domcontentloaded').catch(() => {}), h.click({ timeout: 10000 })]); await page.waitForTimeout(800); return await read(); },
   async tippen({ id, text, enter }) { const h = await el(id); await h.fill(String(text ?? '')); if (enter) { await h.press('Enter'); await page.waitForLoadState('domcontentloaded').catch(() => {}); await page.waitForTimeout(1200); } return await read(); },
@@ -150,6 +189,7 @@ let chain = Promise.resolve();
 function execute(aktion, args = {}) {
   const run = async () => {
     try {
+      if (String(aktion).startsWith('datei:')) return await executeFile(aktion.slice(6), args);
       const h = handlers[aktion]; if (!h) throw new Error('Unbekannte Aktion. Verfügbar: ' + Object.keys(handlers).join(', '));
       await ensurePage();
       const blocked = await guard(aktion, args);
@@ -160,11 +200,27 @@ function execute(aktion, args = {}) {
       // short, actionable error + the current page, so JARVIS can re-plan immediately
       const msg = String(e.message || e).split('\n')[0].replace(/^locator\.\w+: /, '').slice(0, 200);
       const hint = /not visible|Timeout/i.test(msg) ? ' – Element ist verdeckt oder unsichtbar (Menü/Popup offen?). Seite neu gelesen, bitte anderes Element wählen.' : '';
-      let seite = null; try { seite = await read(); } catch {}
+      let seite = null; if (!String(aktion).startsWith('datei:')) try { seite = await read(); } catch {}
       return { ok: false, data: JSON.stringify({ fehler: msg + hint, seite }) };
     }
   };
   const p = chain.then(run, run); chain = p.catch(() => {}); return p;
+}
+// 5.9.4: files on the PC. Deleting and starting programs need the human's one-time code (like binding web actions).
+async function executeFile(name, args) {
+  const f = FILE_ACTIONS[name]; if (!f) throw new Error('Unbekannte Datei-Aktion. Verfügbar: ' + Object.keys(FILE_ACTIONS).join(', '));
+  if (needsConfirm(name, args)) {
+    const { bestätigung, ...rest } = args; const key = name + ' ' + JSON.stringify(rest);
+    const p = bestätigung && pendingConfirm.get(bestätigung);
+    if (!(p && p.expires > Date.now() && p.action === key)) {
+      const code = crypto.randomBytes(6).toString('hex'); pendingConfirm.set(code, { action: key, args: rest, expires: Date.now() + 5 * 60e3 });
+      const was = name === 'löschen' ? 'In den JARVIS-Papierkorb verschieben: ' + [].concat(rest.pfade || []).join(', ') : 'Programm/Skript starten: ' + rest.pfad;
+      return { ok: true, data: { bestätigung_nötig: true, aktion: name, element: was.slice(0, 200), seite: 'Dateien am PC', code } };
+    }
+    pendingConfirm.delete(bestätigung); args = rest;
+  }
+  console.log('→ Datei:', name, JSON.stringify(args).slice(0, 120));
+  return { ok: true, data: await f(args) };
 }
 wss.on('connection', (ws, req) => {
   const u = new URL(req.url, 'http://x');
@@ -197,7 +253,7 @@ if (SERVER && SERVER_TOKEN) {
   };
   loop(); console.log('📡 Fernsteuerung aktiv: frage alle 4 s bei ' + SERVER + ' nach Aufträgen');
 }
-console.log(`\n🤖 JARVIS PC-Agent läuft auf ws://127.0.0.1:${PORT}\n🔑 Token für die JARVIS-Einstellungen: ${TOKEN}\n`);
+console.log(`\n🤖 JARVIS PC-Agent läuft auf ws://127.0.0.1:${PORT}\n🔑 Token für die JARVIS-Einstellungen: ${TOKEN}\n   (bleibt bei jedem Start gleich – nur einmal eintragen, JARVIS verbindet sich danach von selbst)\n📁 Dateien: JARVIS darf in deinem Benutzerordner arbeiten (Downloads, Desktop, Dokumente …). Löschen und Programme starten fragen immer.\n`);
 export { TOKEN, PORT };
 
 // 5.1: close the browser and exit cleanly (previously the process ignored SIGTERM and kept old code running)

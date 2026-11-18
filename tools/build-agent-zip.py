@@ -1,7 +1,7 @@
 # python3 tools/build-agent-zip.py – packs desktop-agent/ into JARVIS-PC-Agent.zip (download link in the app settings)
 import zipfile, os, time
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-FILES = ['PC-Agent-starten.cmd', 'PC-Agent-starten.command', 'node-holen.ps1', 'agent.mjs', 'package.json', 'README.md']
+FILES = ['PC-Agent-starten.cmd', 'PC-Agent-starten.command', 'node-holen.ps1', 'agent.mjs', 'dateien.mjs', 'package.json', 'README.md']
 out = os.path.join(ROOT, 'JARVIS-PC-Agent.zip')
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
     for f in FILES:

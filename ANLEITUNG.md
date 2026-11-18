@@ -1,4 +1,14 @@
-# J.A.R.V.I.S. 5.9.3 🤖
+# J.A.R.V.I.S. 5.9.4 🤖
+
+> **5.9.4: Mehr Assistent.** ① **Dateien am Laptop:** Mit dem neuen PC-Agent darf JARVIS in deinem ganzen Benutzerordner arbeiten –
+> Downloads, Desktop, Dokumente, OneDrive, alle Unterordner: aufräumen/sortieren, suchen („wo ist meine Bewerbung?“), Word/PowerPoint
+> lesen und zusammenfassen, Dateien öffnen. Alles umkehrbar („mach das rückgängig“); Löschen und Programme starten fragen immer.
+> ② **Robotertests:** JARVIS sucht über die Google-Suche der KI (ohne Robotertest) und öffnet dann die Website direkt. Kommt doch einer,
+> bittet er dich, ihn kurz anzuklicken – lösen darf ihn nur ein Mensch. ③ **Steckbrief „Über dich“:** Adresse, Schule/Arbeit, Geburtstag,
+> wichtige Personen, Vorlieben, Allergien – JARVIS merkt sich das selbst, wenn du es erwähnst, oder fragt dich (Einstellungen →
+> „🤝 Kennenlernen“). Der Gemini-Key ist nur sein Gehirn, er ist **nicht** mit deinem Google-Konto verbunden. ④ Der PC-Agent-Token
+> bleibt gleich – nur einmal eintragen, danach verbindet sich JARVIS selbst. **Update des PC-Agents:** in der App neu herunterladen,
+> ins selbe Verzeichnis entpacken (Dateien ersetzen), neu starten, Token einmal eintragen.
 
 > **5.9.3:** **PC-Agent ohne Admin-Rechte:** In der App unter Einstellungen → PC-AGENT auf „📥 PC-Agent herunterladen“ tippen, ZIP entpacken,
 > Doppelklick auf `PC-Agent-starten.cmd`. Node.js kommt als portable Version mit, als Browser nimmt er das Edge/Chrome, das schon auf dem PC ist.
