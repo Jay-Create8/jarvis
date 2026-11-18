@@ -157,3 +157,8 @@ Sortieren geben, und er ist Gemini, also Google – wieso weiss er nichts über 
 **Ungetestet (⚪):** echte KI-Antworten (ob Gemini die neuen Werkzeuge immer klug wählt), dein echter Windows-Laptop mit OneDrive
 (die Pfade sind nachgebaut getestet), echte Suchmaschinen von deiner Leitung aus. Nicht gebaut: Zugriff auf dein Google-Konto
 (Gmail, Kalender, Kontakte) – das ginge mit einer einmaligen Einrichtung bei Google (gratis, ohne Karte, ca. 10 Minuten).
+
+## 5.9.4.1 – Hinweis bei gesperrten Ordnern
+Dein Screenshot: „kann diesen Ordner nicht öffnen, weil er Systemdateien enthält“ – das ist die Browser-Sperre für Downloads/Desktop/
+Dokumente (der alte Weg ohne PC-Agent). Jetzt: Ist ein PC-Agent-Token eingetragen, versucht JARVIS zuerst, den Agent zu verbinden, und
+nimmt dann ihn. Ohne Agent sagt das Freigabe-Fenster gleich, dass diese Ordner gesperrt sind und wie es mit dem PC-Agent geht. Test F1 ✅, D1 ✅.
