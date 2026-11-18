@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { FILE_ACTIONS, needsConfirm } from './dateien.mjs';
+import { PC_ACTIONS, needsConfirmPc } from './computer.mjs';
 
 const PORT = +(process.env.JARVIS_AGENT_PORT || 47321);
 // 5.9.4: the token is kept in token.txt → after a restart JARVIS reconnects by itself (no new token to type in)
@@ -192,6 +193,7 @@ function execute(aktion, args = {}) {
   const run = async () => {
     try {
       if (String(aktion).startsWith('datei:')) return await executeFile(aktion.slice(6), args);
+      if (String(aktion).startsWith('pc:')) return await executeFile(aktion.slice(3), args, PC_ACTIONS, needsConfirmPc, 'Computer');
       const h = handlers[aktion]; if (!h) throw new Error('Unbekannte Aktion. Verfügbar: ' + Object.keys(handlers).join(', '));
       await ensurePage();
       const blocked = await guard(aktion, args);
@@ -209,19 +211,19 @@ function execute(aktion, args = {}) {
   const p = chain.then(run, run); chain = p.catch(() => {}); return p;
 }
 // 5.9.4: files on the PC. Deleting and starting programs need the human's one-time code (like binding web actions).
-async function executeFile(name, args) {
-  const f = FILE_ACTIONS[name]; if (!f) throw new Error('Unbekannte Datei-Aktion. Verfügbar: ' + Object.keys(FILE_ACTIONS).join(', '));
-  if (needsConfirm(name, args)) {
+async function executeFile(name, args, table = FILE_ACTIONS, confirm = needsConfirm, label = 'Datei') {
+  const f = table[name]; if (!f) throw new Error(`Unbekannte ${label}-Aktion. Verfügbar: ` + Object.keys(table).join(', '));
+  if (confirm(name, args)) {
     const { bestätigung, ...rest } = args; const key = name + ' ' + JSON.stringify(rest);
     const p = bestätigung && pendingConfirm.get(bestätigung);
     if (!(p && p.expires > Date.now() && p.action === key)) {
       const code = crypto.randomBytes(6).toString('hex'); pendingConfirm.set(code, { action: key, args: rest, expires: Date.now() + 5 * 60e3 });
-      const was = name === 'löschen' ? 'In den JARVIS-Papierkorb verschieben: ' + [].concat(rest.pfade || []).join(', ') : 'Programm/Skript starten: ' + rest.pfad;
-      return { ok: true, data: { bestätigung_nötig: true, aktion: name, element: was.slice(0, 200), seite: 'Dateien am PC', code } };
+      const was = name === 'löschen' ? 'In den JARVIS-Papierkorb verschieben: ' + [].concat(rest.pfade || []).join(', ') : name === 'duplikate_entfernen' ? 'Doppelte Dateien in den JARVIS-Papierkorb verschieben (je eine bleibt): ' + (rest.pfad || 'Downloads') : name === 'papierkorb_leeren' ? 'JARVIS-Papierkorb ENDGÜLTIG leeren (nicht rückgängig zu machen)' : name === 'herunterfahren' ? 'Computer ' + (rest.art === 'neustart' ? 'neu starten' : 'herunterfahren') + ' (in 60 Sekunden)' : 'Programm/Skript starten: ' + rest.pfad;
+      return { ok: true, data: { bestätigung_nötig: true, aktion: name, element: was.slice(0, 200), seite: label === 'Datei' ? 'Dateien am PC' : 'Computer', code } };
     }
     pendingConfirm.delete(bestätigung); args = rest;
   }
-  console.log('→ Datei:', name, JSON.stringify(args).slice(0, 120));
+  console.log(`→ ${label}:`, name, JSON.stringify(args).slice(0, 120));
   return { ok: true, data: await f(args) };
 }
 wss.on('connection', (ws, req) => {

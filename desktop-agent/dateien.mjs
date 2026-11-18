@@ -9,7 +9,8 @@
    - Programme/Skripte öffnen (.exe, .bat …) braucht IMMER eine Bestätigung.
    ===================================================================== */
 import fs from 'node:fs/promises';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
@@ -213,7 +214,42 @@ export async function rückgängig() {
   return { rückgängig: op.art, zurück_und_geprüft: ok, fehler };
 }
 
-export const needsConfirm = (aktion, args) => aktion === 'löschen' || (aktion === 'öffnen' && args?.pfad && EXEC.test(String(args.pfad)));
+/* ---------- 5.9.5: duplicates („97 Duplikate raus“) and emptying the JARVIS bin ---------- */
+async function hashFile(p, size) {   // full SHA-1 up to 64 MB, above: first + last 4 MB + size (fast, practically unique)
+  if (size <= 64e6) return new Promise((res, rej) => { const h = createHash('sha1'); createReadStream(p).on('data', (d) => h.update(d)).on('end', () => res(h.digest('hex'))).on('error', rej); });
+  const fh = await fs.open(p, 'r'); try { const a = Buffer.alloc(4e6), b = Buffer.alloc(4e6); await fh.read(a, 0, a.length, 0); await fh.read(b, 0, b.length, size - b.length); return createHash('sha1').update(a).update(b).update(String(size)).digest('hex'); } finally { await fh.close(); }
+}
+async function findDups(dir, tief) {
+  const bySize = new Map();
+  const r = await walk(dir, { deep: tief, max: 200000, budgetMs: 30000, onFile: async (p, name) => { if (name.startsWith('.') || KEEP.test(name)) return; const s = await stat(p); if (!s || s.size < 1) return; if (!bySize.has(s.size)) bySize.set(s.size, []); bySize.get(s.size).push({ p, m: s.mtimeMs, size: s.size }); } });
+  const groups = [];
+  for (const [size, l] of bySize) if (l.length > 1) {
+    const byHash = new Map(); for (const f of l) { try { const h = await hashFile(f.p, size); if (!byHash.has(h)) byHash.set(h, []); byHash.get(h).push(f); } catch {} }
+    for (const g of byHash.values()) if (g.length > 1) groups.push(g.sort((a, b) => a.m - b.m || a.p.length - b.p.length));   // keep the oldest (the original)
+  }
+  return { groups, cut: r.cut };
+}
+export async function duplikate({ pfad = 'Downloads', tief = true } = {}) {
+  const dir = resolvePath(pfad); const { groups: g, cut } = await findDups(dir, tief);
+  const extra = g.reduce((s, x) => s + x.length - 1, 0), bytes = g.reduce((s, x) => s + (x.length - 1) * x[0].size, 0);
+  return { ordner: pretty(dir), gruppen: g.length, doppelte_dateien: extra, platz_gb: +(bytes / 1e9).toFixed(2), beispiele: g.slice(0, 8).map((x) => ({ behalten: pretty(x[0].p), doppelt: x.slice(1).map((f) => pretty(f.p)) })), unvollständig: cut || undefined };
+}
+export async function duplikate_entfernen({ pfad = 'Downloads', tief = true } = {}) {   // only after the human confirmed
+  const dir = resolvePath(pfad); const { groups: g } = await findDups(dir, tief);
+  const day = path.join(TRASH, new Date().toISOString().slice(0, 10), 'Duplikate'); const moves = [], fehler = []; let bytes = 0;
+  for (const x of g) for (const f of x.slice(1)) { try { moves.push([f.p, await moveVerified(f.p, day)]); bytes += f.size; } catch (e) { fehler.push(pretty(f.p) + ': ' + e.message); } }
+  await pushUndo({ art: 'duplikate', moves });
+  return { entfernt: moves.length, platz_gb: +(bytes / 1e9).toFixed(2), behalten: 'je eine Datei (die älteste)', papierkorb: pretty(day), hinweis: 'Liegen im JARVIS-Papierkorb (rückgängig möglich). Wirklich frei wird der Platz erst mit „papierkorb_leeren“.', fehler: fehler.slice(0, 10) };
+}
+export async function papierkorb_leeren() {   // only after the human confirmed – the one real, permanent deletion
+  if (!existsSync(TRASH)) return { geleert: true, frei_gb: 0 };
+  let bytes = 0; await walk(TRASH, { deep: true, max: 500000, budgetMs: 60000, onFile: async (p) => { const s = await stat(p); bytes += s?.size || 0; } });
+  await fs.rm(TRASH, { recursive: true, force: true });
+  const u = (await readUndo()).filter((op) => !op.moves.some(([, d]) => inside(d, TRASH))); await fs.writeFile(UNDO_FILE, JSON.stringify(u));
+  return { geleert: true, frei_gb: +(bytes / 1e9).toFixed(2) };
+}
+
+export const needsConfirm = (aktion, args) => ['löschen', 'duplikate_entfernen', 'papierkorb_leeren'].includes(aktion) || (aktion === 'öffnen' && args?.pfad && EXEC.test(String(args.pfad)));
 export async function öffnen({ pfad, url } = {}) {
   let target;
   if (url) { if (!/^https?:\/\//i.test(url)) throw new Error('Nur http(s)-Links'); target = url; }
@@ -253,4 +289,4 @@ export async function lesen({ pfad, max = 15000 } = {}) {
 
 export async function ordner() { return { bekannte_ordner: Object.fromEntries(Object.entries(knownFolders()).map(([k, v]) => [k, pretty(v)])), hinweis: 'Pfade dürfen so angegeben werden: "Downloads", "Desktop/Schule", "~/Dokumente/…" oder absolut (auch D:\\…).' }; }
 
-export const FILE_ACTIONS = { ordner, liste, suchen, sortieren, verschieben, umbenennen, ordner_erstellen, löschen, rückgängig, öffnen, lesen };
+export const FILE_ACTIONS = { ordner, liste, suchen, sortieren, verschieben, umbenennen, ordner_erstellen, löschen, rückgängig, öffnen, lesen, duplikate, duplikate_entfernen, papierkorb_leeren };

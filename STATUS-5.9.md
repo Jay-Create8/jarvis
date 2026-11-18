@@ -180,3 +180,27 @@ Die 2 roten 5.8-Tests sind die Lader-Tests für extrem schlechtes Netz (8 KB/s m
 
 **Was du selbst tun musst (kann ich nicht für dich):** Cloudflare-Konto (gratis) und Twilio-Konto anlegen. Echte Anrufe sind erst getestet,
 wenn du sie mit deinem Konto ausprobiert hast.
+
+## 5.9.5 – JARVIS lebt in deinem Computer + Stimme ohne Verzögerung
+Deine Rückmeldung: „Er soll in meinem Computer leben, mein Computer sein, alles besser und zuverlässiger – schau das Video nochmal an.
+Übrigens ist die Stimme EXTREM verzögert.“
+
+**Das Video (JARVIS_Moritz, 2 Min., Bild für Bild + Ton abgehört):** JARVIS läuft im Vollbild auf dem PC-Monitor; „Ihre Festplatte ist
+voll“ → sortiert 2'113 Dateien im Downloads-Ordner, „97 Duplikate raus“; ruft nachts an („eine Mail um diese Uhrzeit“); Rechnung,
+CRM, Termin und Team-Nachricht in einem Rutsch; Globus mit Handelsrouten (Börse).
+
+| Was | Wie | Kategorie |
+|---|---|---|
+| 🔊 Stimme ohne Verzögerung | Am Laptop in **Edge**: natürliche Microsoft-Stimme (z.B. „Conrad“) – gratis, ohne Rechenzeit, startet sofort; die 90-MB-Stimme wird dann gar nicht erst geladen. Lange Sätze: der erste Teil bis zum Komma geht sofort raus. Die JARVIS-Stimme auf dem Handy wird **gemessen** – rechnet das Gerät langsamer als sie spricht, nimmt JARVIS automatisch die schnelle Gerätestimme | ✅ (Microsoft-Stimme im Test nachgestellt – Chromium hat sie nicht) |
+| 💻 Computer bedienen | Programme aus dem Startmenü öffnen (auch „VS Code“ → Visual Studio Code), Fenster sehen/höflich schliessen, Lautstärke, Musik, Bildschirmfoto nur auf Wunsch, Systemzustand, in Programme schreiben, Zwischenablage, sperren; Herunterfahren fragt immer | ✅ Befehle geprüft · ⚪ auf echtem Windows ausgeführt |
+| 🗣️ Meldet sich von selbst | Festplatte ab 90 % voll oder Akku ≤ 15 % → JARVIS sagt es (einmal pro Tag) und bietet Aufräumen an; die Warnung kennt er auch in der nächsten Antwort | ✅ |
+| 🧹 Duplikate | gleiche Inhalte finden (Grösse + Prüfsumme, auch Unterordner), die älteste Datei bleibt; Entfernen und „Papierkorb leeren“ fragen immer | ✅ echt |
+| 🚀 Mit Windows starten / App-Fenster | Knöpfe in den Einstellungen: Autostart-Datei im eigenen Benutzer-Autostart (ohne Admin) startet den PC-Agent minimiert und öffnet JARVIS als Edge-App-Fenster | ✅ Datei geprüft · ⚪ echter Windows-Start |
+
+**Tests:** PC-Agent Computer **15/15** (neu) · PC-Agent Dateien 15/15 · App: V6 Microsoft-Stimme + Komma-Start, V7 langsame Stimme → Gerätestimme,
+C1 App + echter Agent (Festplatte-voll-Meldung, Duplikate mit Freigabe, Systemzustand, Autostart-Knopf) · Server 32/32 · Gemini 9/9.
+**Gesamt:** 5.9 im Browser **21/21** (D1 nach Anpassung an den neuen Hinweistext) · 5.8 (ohne die Schlechtes-Netz-Tests, wie gewünscht) **18/18** · alte Regression **36/39**: rot sind ① Open-Meteo HTTP 429 (extern) und ②③ zwei Anruf-Tests, die um 21:35 Uhr liefen – der Server lehnt Anrufe an Dritte ausserhalb 08–20 Uhr korrekt ab (Zeitregel, kein Fehler; tagsüber grün).
+
+**Ehrlich:** Die Windows-Befehle (PowerShell, explorer.exe, Medientasten, Bildschirmfoto, Autostart) sind hier nur als Befehl geprüft –
+ausgeführt auf echtem Windows ⚪ ungetestet (kein Windows hier; das Installieren von PowerShell zum Prüfen wurde in dieser Umgebung
+nicht erlaubt). Die YouTube-Videos selbst konnte ich nicht abrufen (YouTube blockt den Server) – dein Bildschirmvideo schon.

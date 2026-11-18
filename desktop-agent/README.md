@@ -1,4 +1,4 @@
-# JARVIS PC-Agent – Dateien am PC & Websites bedienen
+# JARVIS PC-Agent – JARVIS lebt in deinem Computer
 
 Gibt JARVIS am Laptop echte Hände: **deine Dateien** (Downloads, Desktop, Dokumente … inkl. Unterordner) sortieren, suchen,
 lesen, öffnen – und echte Websites in einem eigenen Browserfenster bedienen: lesen, klicken, Formulare ausfüllen,
@@ -73,3 +73,17 @@ derselben Bestätigungssperre.
   Gesucht wird über die Google-Suche der KI-Schnittstelle (ohne Robotertest), danach öffnet der Agent die Website direkt.
 - **Fester Token** (`token.txt`): nur einmal eintragen.
 - Test: `node tests/agent-dateien-test.mjs <agent-ordner>` (14 Prüfungen in einem Test-Benutzerordner).
+
+## Neu in 5.9.5: JARVIS lebt in deinem Computer
+- **Computer bedienen** (`computer.mjs`): Programme aus dem Startmenü öffnen („öffne Word / Spotify / Minecraft / VS Code“), offene
+  Fenster sehen und höflich schliessen, Lautstärke und Musik (Medientasten), Bildschirmfoto **nur auf Wunsch** („was ist auf meinem
+  Bildschirm?“ – wird nicht gespeichert), Systemzustand (Festplatten, Akku, Speicher, Prozessor), Text in ein Programm schreiben,
+  Zwischenablage, Sperren. **Herunterfahren/Neustarten fragt immer.**
+- **Meldet sich von selbst:** Festplatte fast voll (ab 90 %) oder Akku schwach → JARVIS sagt es und bietet Aufräumen an (einmal pro Tag).
+- **Duplikate:** gleiche Dateien finden (auch in Unterordnern) und entfernen – je eine (die älteste) bleibt; Entfernen fragt immer,
+  „Papierkorb leeren“ (die einzige endgültige Löschung) auch.
+- **Mit Windows starten** und **JARVIS als App-Fenster** (Edge ohne Browser-Leiste) – Knöpfe in JARVIS → Einstellungen → PC-AGENT.
+- Windows wird mit eingebauten Mitteln gesteuert (PowerShell, explorer.exe) – keine Admin-Rechte. Auf Schul-/Firmengeräten kann die IT
+  PowerShell sperren; dann meldet JARVIS das.
+- Test: `node tests/agent-computer-test.mjs <agent-ordner>` (15 Prüfungen; die Windows-Befehle im Testmodus, ausgeführt auf echtem
+  Windows ungetestet).

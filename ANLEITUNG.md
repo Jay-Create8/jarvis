@@ -1,4 +1,10 @@
-# J.A.R.V.I.S. 5.9.4.2 🤖
+# J.A.R.V.I.S. 5.9.5 🤖
+
+> **5.9.5: JARVIS lebt in deinem Computer** (wie im Video von Moritz Maaker): Programme öffnen und schliessen, Lautstärke, Musik,
+> „Was ist auf meinem Bildschirm?“, Akku/Festplatte, in Word schreiben, sperren. Er meldet sich **von selbst**, wenn die Festplatte fast
+> voll ist, und räumt auf – inkl. **doppelter Dateien**. Knöpfe „JARVIS als App-Fenster“ und „Mit Windows starten“ (Einstellungen →
+> PC-AGENT). **Stimme ohne Verzögerung:** am Laptop in Edge spricht JARVIS mit der natürlichen Microsoft-Stimme (gratis, sofort), lange
+> Sätze beginnen schon beim ersten Komma, und ist die Handy-Stimme zu langsam, wechselt er von selbst. **PC-Agent neu herunterladen!**
 
 > **5.9.4.2:** **Anrufe einfach einrichten:** Einstellungen → PROAKTIVITÄT & KONTAKT → „📥 Einrichtung herunterladen“ → entpacken →
 > `einrichten/JARVIS-einrichten.cmd` doppelklicken (keine Admin-Rechte). Der Assistent nimmt deine bestehende JARVIS-App (kein zweiter

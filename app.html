@@ -339,7 +339,7 @@ body.immersive #chatToggle{display:grid}
   <div class="field"><label>Tonhöhe <span id="pitchVal"></span></label><input id="cfgPitch" type="range" min="0.5" max="1.5" step="0.05"></div>
   <div class="toggle"><div>Antworten vorlesen<small>JARVIS spricht jede Antwort</small></div><input type="checkbox" id="cfgSpeak"></div>
   <div class="field"><label>Stimmen-Dienst <span id="voiceNow" class="hint"></span></label><select data-k="voiceEngine">
-    <option value="auto">Automatisch – beste, die gerade gratis geht (ElevenLabs → Azure → JARVIS-Stimme → Gemini → Gerät)</option>
+    <option value="auto">Automatisch – schnellste gute Stimme (am Laptop in Edge: natürliche Microsoft-Stimme ohne Verzögerung, sonst JARVIS-Stimme → Gemini → Gerät)</option>
     <option value="lokal">🆓 JARVIS-Stimme auf dem Handy (gratis, ohne Konto, ohne Limit)</option>
     <option value="gemini">🆓 Gemini-Stimme (gleicher Key, gratis – nur ca. 10 Nachrichten pro Tag)</option>
     <option value="azure">🆓 Azure (500'000 Zeichen/Monat gratis)</option>
@@ -381,9 +381,11 @@ body.immersive #chatToggle{display:grid}
   <div class="field"><label>Anruf-Budget pro Monat (USD, geschätzt)</label><input id="cBudget" type="number" min="0" max="200" step="1"></div>
   <div class="field"><label>Deine Kontaktregeln</label><textarea id="cfgRules" placeholder="z.B. Nach 22 Uhr nur bei Notfällen anrufen. Börsen-News nur per Push."></textarea></div>
   <h3>PC-AGENT (DATEIEN &amp; WEBSITES AM LAPTOP)</h3>
-  <p class="hint">Damit kann JARVIS am Laptop mit <b>deinen Dateien</b> arbeiten (Downloads, Desktop, Dokumente inkl. Unterordner: sortieren, suchen, lesen, öffnen) und echte Websites bedienen (Formulare ausfüllen, Reservierungen vorbereiten). <a href="JARVIS-PC-Agent.zip" download id="agentZip">📥 PC-Agent herunterladen</a> (ZIP, ca. 22 KB) → entpacken → Doppelklick auf <b>PC-Agent-starten.cmd</b> (Mac: .command). <b>Keine Admin-Rechte nötig</b> – nimmt Edge/Chrome, das schon auf dem PC ist. Dann das angezeigte Token hier eintragen – es bleibt gleich, nach einem Neustart verbindet sich JARVIS von selbst. Kaufen, Buchen, Bezahlen, Absenden, Löschen und Programme starten fragen immer zuerst dich.</p>
+  <p class="hint">Damit kann JARVIS am Laptop mit <b>deinen Dateien</b> arbeiten (Downloads, Desktop, Dokumente inkl. Unterordner: sortieren, suchen, lesen, öffnen) und echte Websites bedienen (Formulare ausfüllen, Reservierungen vorbereiten). <a href="JARVIS-PC-Agent.zip" download id="agentZip">📥 PC-Agent herunterladen</a> (ZIP, ca. 33 KB) → entpacken → Doppelklick auf <b>PC-Agent-starten.cmd</b> (Mac: .command). <b>Keine Admin-Rechte nötig</b> – nimmt Edge/Chrome, das schon auf dem PC ist. Dann das angezeigte Token hier eintragen – es bleibt gleich, nach einem Neustart verbindet sich JARVIS von selbst. Kaufen, Buchen, Bezahlen, Absenden, Löschen und Programme starten fragen immer zuerst dich.</p>
   <div class="field"><label>PC-Agent Token</label><input id="cfgAgent" type="password" autocomplete="off"></div>
   <button class="btn" id="connectAgent">VERBINDEN</button> <span class="hint" id="agentState">nicht verbunden</span>
+  <div style="margin-top:8px"><button class="btn" id="pcAppWin">🖥️ JARVIS ALS APP-FENSTER</button> <button class="btn" id="pcAutostart">🚀 MIT WINDOWS STARTEN: <span id="pcAutoState">?</span></button></div>
+  <p class="hint">App-Fenster: JARVIS ohne Browser-Leiste, wie ein eigenes Programm. Mit Windows starten: nach dem Anmelden startet der PC-Agent (minimiert) und JARVIS öffnet sich von selbst – ohne Admin-Rechte.</p>
   <h3>SELBSTTEST 5.1 (ECHTE KI)</h3>
   <p class="hint">Prüft JARVIS mit der <b>echten KI</b> auf diesem Gerät: 5 zufällig gezogene Themen aus 5 Fachgebieten (A1–A5, bewertet von einem zweiten KI-Gutachter mit Screenshots: Optik, Korrektheit, Bewegung, Bedienbarkeit, Verständlichkeit), 3 Aufgaben ohne Stichwort (B), Ernstfall (C). Jeder Test protokolliert den Ablauf Eingabe → Werkzeuge → Ergebnis. Was der Gutachter vermisst, merkt sich JARVIS als Lektion. Dauer ca. 10–20 Minuten, Kosten grob 2–6 USD mit Opus, im Sparmodus ca. 0.05–0.15 USD – zählt zum Monatsbudget.</p>
   <label class="hint" style="display:block"><input type="checkbox" id="stVoice" checked> V: echte Sprachkette (du sprichst einen Satz ins Mikrofon)</label>
@@ -611,8 +613,15 @@ function loadVoices(){
   sel.value = cfg.voice;
 }
 if (synth){ loadVoices(); synth.onvoiceschanged = loadVoices; }
+// 5.9.5: Edge brings free, near-instant neural voices ("Microsoft Conrad Online (Natural) – German") → best choice on the laptop
+function naturalVoice(){
+  const L = voices.filter(v => v.lang.replace('_','-').startsWith(cfg.lang.slice(0,2)) && /natural|neural/i.test(v.name)); if (!L.length) return null;
+  const male = /conrad|killian|florian|jan\b|jonas|kasper|ralf|bernd|male|männ/i, same = L.filter(v => v.lang.replace('_','-') === cfg.lang);
+  return same.find(v => male.test(v.name)) || L.find(v => /de-DE/.test(v.lang.replace('_','-')) && male.test(v.name)) || L.find(v => male.test(v.name)) || same[0] || L[0];
+}
 function pickVoice(){
   if (cfg.voice) { const v = voices.find(v=>v.name===cfg.voice); if (v) return v; }
+  { const n = naturalVoice(); if (n) return n; }
   const L = voices.filter(v=>v.lang.replace('_','-').startsWith(cfg.lang.slice(0,2)));
   return L.find(v=>/male|männ|google/i.test(v.name)) || L[0];
 }
@@ -655,14 +664,14 @@ function speakBrowser(text, onStart, tone){
 function shutUp(){ if (synth) synth.cancel(); elGen++; try{ elAudio?.pause(); }catch{} elChain = Promise.resolve(); ttsQueue = 0; try{ gemTtsQ.pending.splice(0).forEach(g => g.res({skip:true})); }catch{} }
 // splits streamed text into speakable sentences
 function sentenceSpeaker(){
-  let buf = '', inCode = false;
+  let buf = '', inCode = false, spoke = false;
   const emit = piece => {
     const acts = [];
     piece = piece.replace(/<<ui\s*([\s\S]*?)>>/g, (_, j) => { try{ acts.push(JSON.parse(j)); }catch{ uiErrors.push('Ungültiger UI-Marker: ' + j.slice(0,80)); } return ''; });
     let tone; piece = piece.replace(/<<ton:(\w+)>>/g, (_, t) => { tone = t; return ''; });
     const run = () => acts.forEach(runUiMarker);
     if ((piece.match(/```/g)||[]).length % 2) inCode = !inCode;
-    if (!inCode && cleanForSpeech(piece).length > 1) speak(piece, run, tone); else run();
+    if (!inCode && cleanForSpeech(piece).length > 1){ speak(piece, run, tone); spoke = true; } else run();
   };
   return {
     push(t){
@@ -671,8 +680,12 @@ function sentenceSpeaker(){
       while ((m = buf.match(/^([\s\S]*?[.!?…:;])(\s|\n)/)) || (m = buf.match(/^([\s\S]*?)\n\n/))){
         { const k = m[1].lastIndexOf('<<'); if (k >= 0 && !m[1].slice(k).includes('>>')) break; }   // wait until a marker is complete
         const piece = m[1]; buf = buf.slice(m[0].length);
-        emit(piece);
+        // 5.9.5: long first sentence → first part up to the comma goes out at once (the voice starts sooner)
+        const k = !spoke && !inCode && piece.length > 90 && !piece.includes('<<') ? piece.slice(0, 160).search(/[,;–—]\s(?=\S)/) : -1;
+        if (k >= 15){ emit(piece.slice(0, k + 1)); emit(piece.slice(k + 2)); } else emit(piece);
       }
+      // 5.9.5: long first sentence → speak up to the first comma already (voice starts sooner)
+      if (!spoke && !inCode && buf.length > 70 && !buf.includes('<<')){ const k = buf.slice(0, 160).search(/[,;–—]\s(?=\S)/); if (k >= 20){ const piece = buf.slice(0, k + 1); buf = buf.slice(k + 2); emit(piece); } }
     },
     flush(){ if (buf.trim()) emit(buf); buf=''; }
   };
@@ -1524,7 +1537,7 @@ function agentConnect(){
   if (!cfg.agentTok || (agentWs && agentWs.readyState <= 1)) return;
   try{
     agentWs = new WebSocket(`ws://127.0.0.1:47321/?token=${encodeURIComponent(cfg.agentTok)}`);
-    agentWs.onopen = () => { const e = document.getElementById('agentState'); if (e) e.textContent = 'verbunden ✓'; };
+    agentWs.onopen = () => { const e = document.getElementById('agentState'); if (e) e.textContent = 'verbunden ✓'; setTimeout(pcCheck, 4000); pcAutostartState(); };
     agentWs.onmessage = (e) => { const m = JSON.parse(e.data); agentReq.get(m.rid)?.(m); agentReq.delete(m.rid); };
     agentWs.onclose = () => { agentWs = null; const e = document.getElementById('agentState'); if (e) e.textContent = 'nicht verbunden'; };
   }catch{}
@@ -1552,6 +1565,19 @@ function agentCall(aktion, args = {}, timeoutMs = 60000){
   });
 }
 setTimeout(agentConnect, 1500);
+// 5.9.5: JARVIS watches the computer – disk almost full or battery low → he speaks up by himself (once a day per warning)
+let pcWarnText = '';
+function pcWarn(r){
+  pcWarnText = (r.warnungen || []).join(' · ');
+  const seen = store.get('pcWarnSeen', {}), day = new Date().toISOString().slice(0, 10), neu = (r.warnungen || []).filter(w => seen[w.replace(/\d+(\.\d+)? GB| \d+ %/g, '')] !== day);
+  if (!neu.length) return;
+  neu.forEach(w => { seen[w.replace(/\d+(\.\d+)? GB| \d+ %/g, '')] = day; }); store.set('pcWarnSeen', seen);
+  const disk = neu.find(w => /Laufwerk/.test(w));
+  const msg = disk ? `${cfg.name || 'Sir'}, ${disk.replace(/^Laufwerk/, 'dein Laufwerk')}. Soll ich die Downloads aufräumen und doppelte Dateien entfernen?` : `${cfg.name || 'Sir'}, ${neu[0]}. Steck am besten das Ladekabel ein.`;
+  sysLine('🖥️ <b>Computer:</b> ' + esc(msg)); if (cfg.speak) speak(msg); notify?.('J.A.R.V.I.S.', msg);
+}
+async function pcCheck(){ if (!(agentWs && agentWs.readyState === 1) || busy) return; try{ pcWarn(await agentCall('pc:system', {}, 30e3)); }catch{} }
+setInterval(pcCheck, 15 * 60e3);
 // 5.9.4: the agent keeps its token (token.txt) → after a restart of the agent JARVIS reconnects by itself
 setInterval(() => { if (cfg.agentTok && !(agentWs && agentWs.readyState <= 1)) agentConnect(); }, 8000);
 // Human-in-the-loop: the one-time code goes ONLY through this dialog, never to the model.
@@ -1815,12 +1841,12 @@ Object.assign(tools, {
   },
   pc_dateien: {
     label:'DATEIEN AM PC',
-    def:{description:'ECHTER Zugriff auf die Dateien des Laptops über den JARVIS PC-Agent (nur wenn verbunden): ganzer Benutzerordner inkl. Downloads, Desktop, Dokumente, Bilder, OneDrive, alle Unterordner, weitere Laufwerke/USB-Sticks – beliebig viele Dateien (der Browser allein darf Downloads/Desktop/Dokumente nicht freigeben). Aktionen: ordner (bekannte Ordner und Pfade), liste {pfad, tief}, suchen {muster, pfad?} (findet Dateien/Ordner im ganzen Benutzerordner), sortieren {pfad, nach:"typ"|"jahr"|"monat", regeln?:{"Ordnername":["ext",…]}, vorschau?}, verschieben {quellen[], ziel}, umbenennen {pfad, neuer_name}, ordner_erstellen {pfad}, lesen {pfad} (Text, Word, PowerPoint – zum Zusammenfassen/Lernen), öffnen {pfad} oder {url} (mit dem passenden Programm am PC), löschen {pfade[]} (nur in den JARVIS-Papierkorb, der Nutzer bestätigt IMMER selbst), rückgängig (letzte Aktion). Pfade: "Downloads", "Desktop/Schule", "Dokumente/…", "~/…" oder absolut (D:\\…). Sortieren/Verschieben/Umbenennen sind umkehrbar → einfach machen und danach kurz sagen, was passiert ist und dass „rückgängig“ geht. Unterordner und Verknüpfungen bleiben beim Sortieren, wo sie sind. Sag nie, du hättest keinen Zugriff, solange der PC-Agent verbunden ist.',
-      input_schema:S({aktion:{type:'string', enum:['ordner','liste','suchen','sortieren','verschieben','umbenennen','ordner_erstellen','lesen','öffnen','löschen','rückgängig']}, pfad:{type:'string'}, pfade:{type:'array', items:{type:'string'}}, quellen:{type:'array', items:{type:'string'}}, ziel:{type:'string'}, muster:{type:'string'}, nach:{type:'string', enum:['typ','jahr','monat']}, regeln:{type:'object'}, vorschau:{type:'boolean'}, tief:{type:'boolean'}, neuer_name:{type:'string'}, url:{type:'string'}}, ['aktion'])},
+    def:{description:'ECHTER Zugriff auf die Dateien des Laptops über den JARVIS PC-Agent (nur wenn verbunden): ganzer Benutzerordner inkl. Downloads, Desktop, Dokumente, Bilder, OneDrive, alle Unterordner, weitere Laufwerke/USB-Sticks – beliebig viele Dateien (der Browser allein darf Downloads/Desktop/Dokumente nicht freigeben). Aktionen: ordner (bekannte Ordner und Pfade), liste {pfad, tief}, suchen {muster, pfad?} (findet Dateien/Ordner im ganzen Benutzerordner), sortieren {pfad, nach:"typ"|"jahr"|"monat", regeln?:{"Ordnername":["ext",…]}, vorschau?}, verschieben {quellen[], ziel}, umbenennen {pfad, neuer_name}, ordner_erstellen {pfad}, lesen {pfad} (Text, Word, PowerPoint – zum Zusammenfassen/Lernen), öffnen {pfad} oder {url} (mit dem passenden Programm am PC), löschen {pfade[]} (nur in den JARVIS-Papierkorb, der Nutzer bestätigt IMMER selbst), duplikate {pfad, tief} (doppelte Dateien finden – gleiche Inhalte), duplikate_entfernen {pfad} (je eine bleibt, Rest in den JARVIS-Papierkorb; fragt IMMER), papierkorb_leeren (macht den Platz wirklich frei – endgültig; fragt IMMER), rückgängig (letzte Aktion). Ist die Festplatte voll: grösste Dateien zeigen (liste), Downloads sortieren, Duplikate entfernen, dann Papierkorb leeren. Pfade: "Downloads", "Desktop/Schule", "Dokumente/…", "~/…" oder absolut (D:\\…). Sortieren/Verschieben/Umbenennen sind umkehrbar → einfach machen und danach kurz sagen, was passiert ist und dass „rückgängig“ geht. Unterordner und Verknüpfungen bleiben beim Sortieren, wo sie sind. Sag nie, du hättest keinen Zugriff, solange der PC-Agent verbunden ist.',
+      input_schema:S({aktion:{type:'string', enum:['ordner','liste','suchen','sortieren','verschieben','umbenennen','ordner_erstellen','lesen','öffnen','löschen','duplikate','duplikate_entfernen','papierkorb_leeren','rückgängig']}, pfad:{type:'string'}, pfade:{type:'array', items:{type:'string'}}, quellen:{type:'array', items:{type:'string'}}, ziel:{type:'string'}, muster:{type:'string'}, nach:{type:'string', enum:['typ','jahr','monat']}, regeln:{type:'object'}, vorschau:{type:'boolean'}, tief:{type:'boolean'}, neuer_name:{type:'string'}, url:{type:'string'}}, ['aktion'])},
     async run(i){
       const {aktion, ...args} = i;
       if (!(agentWs && agentWs.readyState === 1)) throw new Error('PC-Agent nicht verbunden – Dateien am Laptop gehen nur mit ihm. Am Laptop: Einstellungen → PC-Agent → „PC-Agent herunterladen“, entpacken, Doppelklick auf PC-Agent-starten.cmd (keine Admin-Rechte nötig), Token eintragen.');
-      const long = ['liste','suchen','sortieren','verschieben','rückgängig','löschen'].includes(aktion) ? 300e3 : 60e3;
+      const long = ['liste','suchen','sortieren','verschieben','rückgängig','löschen','duplikate','duplikate_entfernen','papierkorb_leeren'].includes(aktion) ? 300e3 : 60e3;
       if (aktion === 'sortieren' && !args.vorschau){
         const l = await agentCall('datei:liste', {pfad:args.pfad || 'Downloads', namen:true}, long);
         const ordner = String(l.ordner).split(/[\\/]/).pop() || 'Ordner';
@@ -1836,13 +1862,33 @@ Object.assign(tools, {
       }
       let r = await agentCall('datei:' + aktion, args, long);
       if (r?.bestätigung_nötig){
-        const ok = await requireApproval({art: aktion === 'löschen' ? 'JARVIS möchte Dateien LÖSCHEN (sie kommen in den Ordner „JARVIS-Papierkorb“ – rückgängig möglich).' : 'JARVIS möchte ein PROGRAMM bzw. Skript auf deinem PC starten.', was:r.element, wo:'Dateien am PC', key:'datei:' + r.element});
+        const ok = await requireApproval({art: aktion === 'papierkorb_leeren' ? 'JARVIS möchte den JARVIS-Papierkorb ENDGÜLTIG leeren – das kann nicht rückgängig gemacht werden.' : aktion === 'löschen' || aktion === 'duplikate_entfernen' ? 'JARVIS möchte Dateien LÖSCHEN (sie kommen in den Ordner „JARVIS-Papierkorb“ – rückgängig möglich).' : 'JARVIS möchte ein PROGRAMM bzw. Skript auf deinem PC starten.', was:r.element, wo:'Dateien am PC', key:'datei:' + r.element + ':' + Date.now()});
         if (!ok) return {abgebrochen:true, grund:'Der Nutzer hat NICHT bestätigt. Nichts wurde gelöscht/gestartet.'};
         r = await agentCall('datei:' + aktion, {...args, bestätigung:r.code}, long);
         if (r?.bestätigung_nötig) throw new Error('Bestätigung abgelaufen – nichts ausgeführt.');
         r = {vom_nutzer_bestätigt:true, ...r};
       }
       if (r && typeof r === 'object'){ delete r._namen; delete r._log; if (r.text?.length > 12000) r.text = r.text.slice(0, 12000) + ' …[gekürzt]'; }
+      return r;
+    }
+  },
+  pc_steuerung: {
+    label:'COMPUTER',
+    def:{description:'Bedient den Computer des Nutzers über den JARVIS PC-Agent (nur wenn verbunden) – du lebst auf diesem Computer: app_öffnen {name} (Programme aus dem Startmenü, z.B. Word, Excel, Spotify, Discord, Minecraft, Rechner, Einstellungen; apps {suche} = Liste), fenster (was ist offen), fenster_schliessen {name} (höflich – das Programm fragt selbst nach Speichern), lautstaerke {modus:"setzen"|"lauter"|"leiser"|"stumm", wert (0–100 bzw. Prozent-Schritte)}, medien {modus:"play_pause"|"weiter"|"zurück"} (Musik/Videos), bildschirm (Bildschirmfoto – NUR wenn der Nutzer will, dass du siehst, was auf dem Bildschirm ist), system (Festplatten, Akku, Arbeitsspeicher, Prozessor, Warnungen), schreiben {text, fenster?} (tippt Text in ein Programm, z.B. Word), zwischenablage {text?}, sperren, herunterfahren {art:"aus"|"neustart"|"abbrechen"} (fragt IMMER), app_fenster {vollbild?} (öffnet JARVIS als eigenes App-Fenster), autostart {an} (JARVIS startet mit dem Computer). Handle sofort ohne Rückfrage (ausser Herunterfahren) und sag kurz, was du gemacht hast.',
+      input_schema:S({aktion:{type:'string', enum:['app_öffnen','apps','fenster','fenster_schliessen','lautstaerke','medien','bildschirm','system','schreiben','zwischenablage','sperren','herunterfahren','app_fenster','autostart']}, name:{type:'string'}, suche:{type:'string'}, wert:{type:'number'}, text:{type:'string'}, fenster:{type:'string'}, art:{type:'string', enum:['aus','neustart','abbrechen']}, an:{type:'boolean'}, vollbild:{type:'boolean'}, modus:{type:'string', description:'bei lautstaerke/medien: setzen, lauter, leiser, stumm bzw. play_pause, weiter, zurück'}}, ['aktion'])},
+    async run(i){
+      let {aktion, modus, ...args} = i;
+      if (!(agentWs && agentWs.readyState === 1)) throw new Error('PC-Agent nicht verbunden – den Computer bedienen geht nur mit ihm (Einstellungen → PC-Agent → herunterladen, Doppelklick, Token eintragen).');
+      if (aktion === 'lautstaerke') aktion = 'lautstärke';
+      if (modus) args.aktion = modus;
+      let r = await agentCall('pc:' + aktion, args, aktion === 'system' ? 60e3 : 120e3);
+      if (r?.bestätigung_nötig){
+        const ok = await requireApproval({art:'JARVIS möchte deinen Computer ' + (args.art === 'neustart' ? 'NEU STARTEN' : 'HERUNTERFAHREN') + ' (in 60 Sekunden, abbrechen geht bis dahin).', was:r.element, wo:'Computer', key:'pc:' + r.element + ':' + Date.now()});
+        if (!ok) return {abgebrochen:true, grund:'Der Nutzer hat NICHT bestätigt.'};
+        r = await agentCall('pc:' + aktion, {...args, bestätigung:r.code}); r = {vom_nutzer_bestätigt:true, ...r};
+      }
+      if (aktion === 'system' && r?.warnungen) pcWarn(r);
+      if (r?.bild){ sysLine('📸 Bildschirmfoto für diese Frage (wird nicht gespeichert).'); return [{type:'text', text:JSON.stringify({bildschirm:'aktuell'})}, {type:'image', source:{type:'base64', media_type:'image/jpeg', data:r.bild.split(',')[1]}}]; }
       return r;
     }
   },
@@ -2358,7 +2404,7 @@ Du hast ein eigenes visuelles Interface (Werkzeug ui) mit Live-3D und darfst es 
 - Zahlen, Vergleiche, Trends, Analysen → chart oder dashboard ; Recherche-Ergebnisse → dashboard/info als Abschluss-Präsentation
 - Mehrstufige Aufgaben → tasks; aktualisiere jeden Schritt ehrlich (running → done/error)
 - Auswahl, Angebote, Buchungsvorbereitung → options (Status "VORBEREITET · NICHT GEBUCHT")
-- Termine → calendar-Werkzeug ; Dateien ordnen → files-Werkzeug ; Dateien am Laptop (sortieren, suchen, lesen, öffnen, aufräumen – auch Downloads/Desktop/Dokumente) → pc_dateien (wenn PC-Agent verbunden, sonst files) ; Persönliches über den Nutzer (Adresse, Schule, Geburtstag, Familie, Vorlieben) → steckbrief setzen ; Websites bedienen (Reservieren, Bestellen vorbereiten, Formulare) → pc_browser (nur wenn PC-Agent verbunden; sonst ehrlich sagen, wie man ihn bekommt: Einstellungen → PC-Agent → „PC-Agent herunterladen“, entpacken, Doppelklick – keine Admin-Rechte nötig – und den Link öffnen)
+- Termine → calendar-Werkzeug ; Dateien ordnen → files-Werkzeug ; Dateien am Laptop (sortieren, suchen, lesen, öffnen, aufräumen, Duplikate – auch Downloads/Desktop/Dokumente) → pc_dateien (wenn PC-Agent verbunden, sonst files) ; Computer bedienen (Programme öffnen/schliessen, Lautstärke, Musik, „was ist auf meinem Bildschirm“, Akku/Festplatte, in Word schreiben, sperren) → pc_steuerung ; Persönliches über den Nutzer (Adresse, Schule, Geburtstag, Familie, Vorlieben) → steckbrief setzen ; Websites bedienen (Reservieren, Bestellen vorbereiten, Formulare) → pc_browser (nur wenn PC-Agent verbunden; sonst ehrlich sagen, wie man ihn bekommt: Einstellungen → PC-Agent → „PC-Agent herunterladen“, entpacken, Doppelklick – keine Admin-Rechte nötig – und den Link öffnen)
 Ein [Visual-Planer: …]-Hinweis in der Nutzernachricht ist eine Empfehlung deines Planungsmoduls – folge ihr in der Regel. Bei Rückfragen verwendest du offene Fenster weiter (Befehle, patch, aktualisieren) statt neu anzufangen. Halte die Oberfläche aufgeräumt: maximal ~3 Fenster, aktualisiere bestehende Fenster statt neue zu öffnen, schliesse Veraltetes selbst. Auf grossen Bildschirmen ordnen sich Fenster automatisch an (das fokussierte bekommt den grössten Platz); mit aktion verschieben kannst du eines gezielt platzieren (links/rechts/oben/unten/mitte), mit fokus nach vorne holen.
 
 ## Live-Visualisierung echter Arbeit (Grundprinzip)
@@ -2426,7 +2472,7 @@ async function handleInput(text, imageDataUrl, opts = {}){
   const content = [];
   if (imageDataUrl) content.push({type:'image', source:{type:'base64', media_type:'image/jpeg', data:imageDataUrl.split(',')[1]}});
   const open = wm.list(); let ctxLines = '';
-  if (agentWs && agentWs.readyState === 1) ctxLines += '\n[PC-Agent verbunden: du hast ECHTEN Zugriff auf die Dateien dieses Laptops (pc_dateien – ganzer Benutzerordner inkl. Downloads, Desktop, Dokumente, Unterordner) und einen Browser (pc_browser). Nutze sie, statt zu sagen, dass du keinen Zugriff hast.]';   // 5.9.4
+  if (agentWs && agentWs.readyState === 1) ctxLines += '\n[PC-Agent verbunden – du lebst auf diesem Computer: Programme, Lautstärke, Musik, Bildschirm, Systemzustand (pc_steuerung), ALLE Dateien des Benutzerordners inkl. Downloads, Desktop, Dokumente, Unterordner (pc_dateien) und ein Browser (pc_browser). Nutze sie, statt zu sagen, dass du keinen Zugriff hast.' + (pcWarnText ? ' Aktuelle Computer-Warnung: ' + pcWarnText : '') + ']';   // 5.9.4/5.9.5
   if (open.length) ctxLines += `\n[Offene Fenster: ${open.map(w => `${w.id} (${w.typ}${w.fokus ? ', im Fokus' : ''}${w.meta ? ', ' + JSON.stringify(w.meta).slice(0, 600) : ''})`).join(' ; ')}]`;
   if (!opts.silent && text && !opts.noPlan){
     setState('think'); const plan = await planVisual(text); ctxLines += planNote(plan, text);
@@ -2722,7 +2768,7 @@ function elLevel(a){   // real loudness of the voice drives the orb
 const AZ_FREE = 490000;   // Azure F0: 500'000 characters per month free (F0 never bills – it just stops); small margin
 const TTS_STYLE = {trocken:'trocken, mit feinem leisem Humor', ernst:'ernst, ruhig und gefasst', warm:'warm und freundlich', energisch:'energisch und zügig', amüsiert:'leicht amüsiert', begeistert:'begeistert, aber kultiviert', sanft:'sanft und leise'};
 const TTS_FALLBACK = ['gemini-3.8-flash-tts', 'gemini-3.1-flash-tts-preview', 'gemini-2.5-flash-preview-tts'];
-const VOICE_NAMES = {eleven:'ElevenLabs', azure:'Azure', lokal:'JARVIS-Stimme', gemini:'Gemini-Stimme', device:'Gerätestimme'};
+const VOICE_NAMES = {eleven:'ElevenLabs', azure:'Azure', lokal:'JARVIS-Stimme', gemini:'Gemini-Stimme', get device(){ const n = naturalVoice(); return n ? 'Microsoft-Stimme ' + n.name.replace(/^Microsoft\s+/, '').replace(/\s+Online.*$/, '') + ' (schnell)' : 'Gerätestimme'; }};
 // 5.9.2 JARVIS voice ON the device (Piper): free, no account, no limit. Model ~63 MB + engine ~29 MB, loaded once (Wi-Fi: automatically)
 let lvMod = null, lvState = store.get('lvReady', '') === (cfg.lvVoice || 'de_DE-thorsten-medium') ? 'bereit' : 'fehlt', lvPct = 0, lvTried = false;
 const lvImport = () => lvMod ??= import('./vendor/voice-local/voice-local.js').catch(e => { lvMod = null; throw e; });
@@ -2742,7 +2788,16 @@ function lvAutoLoad(){   // automatically only on a good connection (Wi-Fi / fas
   if (c.saveData || slowNet() || c.type === 'cellular' || /2g|3g/.test(c.effectiveType || '')) return;
   lvTried = true; lvLoad(false);
 }
-async function lokalAudio(t, tone){ const V = await lvImport(); return V.synth(t, {voice:cfg.lvVoice || 'de_DE-thorsten-medium', tempo:+cfg.rate * (TONES[tone]?.r || 1)}); }
+let lvChain = Promise.resolve(), lvCount = 0;
+function lokalAudio(t, tone){
+  const p = lvChain.then(async () => {
+    const V = await lvImport(); const t0 = performance.now();
+    const b = await V.synth(t, {voice:cfg.lvVoice || 'de_DE-thorsten-medium', tempo:+cfg.rate * (TONES[tone]?.r || 1)});
+    if (lvCount++) lvMeasure((performance.now() - t0) / 1000, Math.max(0, (b.size - 44) / 44100));   // first call includes warm-up → not counted
+    return b;
+  });
+  lvChain = p.catch(() => {}); return p;
+}
 let voiceUse = store.get('voiceUse', {});
 function vUse(){ if (voiceUse.month !== monthKey()) voiceUse = {month:monthKey(), azure:0, gemini:0}; return voiceUse; }
 const voiceDead = new Set(), ttsBad = new Set(); let gemTtsPause = 0;
@@ -2755,9 +2810,20 @@ function engineOk(e, len = 0){   // len: the text about to be spoken – a free 
   return !!synth;
 }
 function voiceOrder(len = 0){
-  const all = ['eleven', 'azure', 'lokal', 'gemini', 'device'], pref = cfg.voiceEngine || 'auto';
-  if (pref === 'lokal' || pref === 'auto') lvAutoLoad();
+  const pref = cfg.voiceEngine || 'auto', fast = !!naturalVoice(), slow = pref !== 'lokal' && lvTooSlow();
+  const all = fast || slow ? ['eleven', 'azure', 'device', 'lokal', 'gemini'] : ['eleven', 'azure', 'lokal', 'gemini', 'device'];
+  if (pref === 'lokal' || (pref === 'auto' && !fast && !slow)) lvAutoLoad();
   return (all.includes(pref) ? [pref, ...all.filter(e => e !== pref)] : all).filter(e => engineOk(e, len));
+}
+// 5.9.5: the local voice is measured – if this device computes it slower than it speaks, JARVIS switches to the fast device voice
+const lvTooSlow = () => !!store.get('lvSlow', null);
+const lvRtf = [];
+function lvMeasure(synthS, audioS){
+  if (audioS < 0.8) return; lvRtf.push(synthS / audioS); if (lvRtf.length > 4) lvRtf.shift();
+  if (lvRtf.length >= 2 && lvRtf.slice(-3).filter(r => r > 0.8).length >= 2 && !lvTooSlow()){
+    store.set('lvSlow', {ts:Date.now(), rtf:+lvRtf.at(-1).toFixed(2)});
+    toast(`🗣️ Die JARVIS-Stimme rechnet auf diesem Gerät zu langsam (${lvRtf.at(-1).toFixed(1)} s Rechnen pro Sekunde Sprache) – ich nehme ab jetzt die schnelle Gerätestimme. Zurück: Einstellungen → STIMME → Stimmen-Dienst.`);
+  }
 }
 function voiceFail(e, err){
   const m = String(err?.message || err), st = err?.status;
@@ -3305,6 +3371,9 @@ $('#unlockAll').onclick = async () => {
 for (const id of ['kFiles', 'kFolder']) $('#' + id).onchange = async (e) => { const n = await kImport([...e.target.files]); toast(`📚 ${n} Dateien eingelesen – ${kIndex?.N || 0} Abschnitte durchsuchbar.`); e.target.value = ''; };
 $('#kClear').onclick = async () => { if (!confirm('Wissensordner auf diesem Gerät leeren?')) return; const root = await navigator.storage.getDirectory(); await root.removeEntry('wissen', {recursive:true}).catch(() => {}); await kBuild(); toast('Wissensordner geleert.'); };
 $('#testSrv').onclick = async () => { readSettings(); try{ const r = await refreshSrvInfo() || await srv('/api/status'); toast(`Server OK · Telefon: ${r.twilio ? 'eingerichtet' : 'nicht eingerichtet'} · Wächter: ${r.wächter} · Server-KI: ${r.ki === 'gemini' ? 'Gemini (gratis)' : (r.ki_kosten_monat_usd || 0).toFixed(2) + ' USD'} · Telefon diesen Monat: ${(r.telefon_kosten_monat_usd || 0).toFixed(2)} $ · letzter Cron: ${r.heartbeat ? new Date(r.heartbeat.ts).toLocaleString('de-CH') : 'noch nie'}`); syncWatchersToServer(); }catch(e){ toast('Server: ' + e.message); } };
+async function pcAutostartState(){ const e = document.getElementById('pcAutoState'); if (!e || !(agentWs && agentWs.readyState === 1)) return; try{ e.textContent = (await agentCall('pc:autostart_status', {}, 15e3)).autostart.toUpperCase(); }catch{ e.textContent = '?'; } }
+$('#pcAppWin').onclick = async () => { try{ await agentCall('pc:app_fenster', {}, 15e3); toast('🖥️ JARVIS-Fenster geöffnet.'); }catch(e){ toast('Geht nur mit verbundenem PC-Agent: ' + e.message.slice(0, 120)); } };
+$('#pcAutostart').onclick = async () => { try{ const an = $('#pcAutoState').textContent !== 'AN'; const r = await agentCall('pc:autostart', {an}, 15e3); $('#pcAutoState').textContent = r.autostart.toUpperCase(); toast(an ? '🚀 JARVIS startet ab jetzt mit dem Computer.' : 'Autostart aus.'); }catch(e){ toast('Geht nur mit verbundenem PC-Agent: ' + e.message.slice(0, 120)); } };
 $('#kennenlernen').onclick = () => { readSettings(); closeSettings(); handleInput('Lern mich kennen: Stell mir nacheinander ein paar kurze, lockere Fragen (eine pro Nachricht) – Wohnadresse, Schule oder Arbeit, Geburtstag, wichtige Personen, Vorlieben, Allergien und wobei du mir am meisten helfen sollst. Speichere jede Antwort sofort im Steckbrief. Frag nur, was noch fehlt.'); };
 $('#connectAgent').onclick = () => { readSettings(); if (agentWs) agentWs.close(); agentWs = null; agentConnect(); };
 $('#testPush').onclick = async () => { readSettings(); const r = await contactUser({stufe:'push', titel:'J.A.R.V.I.S.', nachricht:'Test-Push: Verbindung steht.'}); toast('Push: ' + (r.push || '—')); };
