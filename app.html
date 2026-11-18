@@ -370,7 +370,7 @@ body.immersive #chatToggle{display:grid}
   <div class="field"><label>JARVIS-Server (echte Telefonanrufe + Wächter bei geschlossener App)</label><input id="cfgSrv" placeholder="https://jarvis-server.DEINNAME.workers.dev" autocomplete="off"></div>
   <div class="field"><label>Server-Token</label><input id="cfgSrvTok" type="password" autocomplete="off"></div>
   <button class="btn" id="testSrv">SERVER PRÜFEN</button>
-  <p class="hint">Einrichtung und Kosten: siehe <b>server/ANLEITUNG-SERVER.md</b>. Ohne Server nutzt JARVIS Telegram-Anrufe bzw. Push.</p>
+  <p class="hint">📞 <b>Anrufe einrichten</b> (am Laptop, keine Admin-Rechte): <a href="JARVIS-Einrichtung.zip" download id="setupZip">📥 Einrichtung herunterladen</a> → entpacken → im Ordner „einrichten“ Doppelklick auf <b>JARVIS-einrichten.cmd</b>. Der Assistent fragt nach Cloudflare (gratis), Gemini-Key und Twilio. Am Ende kommt ein Link – am Handy und Laptop öffnen, fertig.<br><b>Twilio-Testkonto</b> (gratis, ohne Karte): JARVIS kann <b>dich</b> anrufen. <b>Restaurants, Praxen usw.</b> anrufen: bezahltes Twilio-Konto (Guthaben vorher aufladen; ca. 1.15 $/Monat Nummer + 0.04 $/Min. Festnetz). Alles bleibt im Kostendeckel von 5 Fr. Ohne Server nutzt JARVIS Telegram-Anrufe bzw. Push.</p>
   <div class="field"><label>Telegram-Benutzername für Anrufe</label><input id="cfgTg" placeholder="@deinname" autocomplete="off"></div>
   <div class="toggle"><div>Anrufe erlauben<small>JARVIS darf dich bei wichtigen Problemen per Telegram anrufen</small></div><input type="checkbox" id="cfgCall"></div>
   <div class="toggle"><div>Keine Limits<small>Keine Ruhezeiten, kein Tageslimit, kein Kostenlimit für Anrufe und KI. Es bleibt nur eine Notbremse gegen Endlosschleifen (30 Anrufe bei dir / 50 bei anderen in 24 h). Anrufe bei anderen Leuten nur 07–22 Uhr. Setz bei Anthropic und Twilio ein Ausgabenlimit.</small></div><input type="checkbox" data-k="unbegrenzt"></div>
@@ -1519,7 +1519,7 @@ let fastInboxUntil = 0;   // 5.2: poll every 10 s while a third-party call is ru
 setInterval(pollInbox, 60e3); setTimeout(pollInbox, 4000); setInterval(() => { if (Date.now() < fastInboxUntil) pollInbox(); }, 10e3);
 
 /* ---------- PC agent (real website automation on the user's computer) ---------- */
-let agentWs = null; const agentReq = new Map();
+let agentWs = null, pcLastUrl = ''; const agentReq = new Map();
 function agentConnect(){
   if (!cfg.agentTok || (agentWs && agentWs.readyState <= 1)) return;
   try{
@@ -1764,7 +1764,14 @@ Object.assign(tools, {
     def:{description:'Bedient ECHTE Websites über den JARVIS PC-Agent auf dem Computer des Nutzers (z.B. Restaurant suchen und Reservierung vorbereiten, Essen bestellen vorbereiten, Formulare ausfüllen, recherchieren). Ablauf: öffnen → lesen (liefert Text + Elemente mit ids e1, e2 …) → klicken/tippen mit id → erneut lesen. Verbindliche Aktionen (kaufen, bestellen, buchen, bezahlen, absenden) werden blockiert, bis der Nutzer selbst bestätigt – das passiert automatisch per Dialog; lehnt er ab, brich ab. Nutze screenshot, wenn das Layout unklar ist. SUCHEN: nie google.com/bing/duckduckgo öffnen (Suchmaschinen zeigen ferngesteuerten Browsern Robotertests) – nimm aktion suchen {anfrage} und öffne danach die passende Website direkt. Kommt mensch_nötig (Robotertest/Captcha): NIE selbst lösen oder umgehen – der Nutzer klickt ihn selbst an; rufe warten_auf_mensch auf. Erfinde nie, dass etwas gebucht/bestellt wurde, ohne Bestätigung der Website.',
       input_schema:S({aktion:{type:'string', enum:['suchen','öffnen','lesen','klicken','tippen','auswählen','scrollen','zurück','screenshot','warten_auf_mensch','status']}, anfrage:{type:'string', description:'Suchbegriff (nur bei suchen)'}, url:{type:'string'}, id:{type:'string'}, text:{type:'string'}, enter:{type:'boolean'}, wert:{type:'string'}, richtung:{type:'string', enum:['oben','unten']}}, ['aktion'])},
     async run(i){
-      const {aktion, ...args} = i;
+      let {aktion, ...args} = i;
+      // 5.9.4.2: never use a search engine inside the remote-controlled browser (robot tests) – not by URL, not by typing into its search box
+      const SE = (u) => { try{ const x = new URL(/^https?:/i.test(u) ? u : 'https://' + u); return /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|search\.yahoo\.com|ecosia\.org|startpage\.com|search\.brave\.com)$/i.test(x.hostname) && !/^\/maps/.test(x.pathname) ? x : null; }catch{ return null; } };
+      if (aktion === 'öffnen' && SE(args.url || '')){ const x = SE(args.url); const q = x.searchParams.get('q') || x.searchParams.get('p') || '';
+        if (!q) return {nicht_geöffnet:true, grund:'Suchmaschinen nie im ferngesteuerten Browser öffnen (Robotertest). Nimm pc_browser suchen {anfrage} und öffne danach die passende Website direkt.'};
+        aktion = 'suchen'; args = {anfrage:q}; }
+      if (aktion === 'tippen' && args.enter && SE(pcLastUrl)){ aktion = 'suchen'; args = {anfrage:args.text || ''}; }
+      if (aktion === 'suchen' && !gemKey()) return {hinweis:'Suche mit deinem Werkzeug web_search (ohne Robotertest) und öffne danach die passende Website direkt mit pc_browser öffnen. Nie google.com im Browser.'};
       // 5.9.4: search engines (Google, DuckDuckGo, Bing) show robot tests to remote-controlled browsers → search through the
       // official Google search of the Gemini API instead, then open the right website directly
       if (aktion === 'suchen' && gemKey()){
@@ -1781,6 +1788,7 @@ Object.assign(tools, {
       let r;
       try{ r = await agentCall(aktion, args, aktion === 'warten_auf_mensch' ? 320e3 : 60e3); }
       catch(e){ let msg = e.message; try{ msg = JSON.parse(e.message).fehler || msg; }catch{} await live({schritt:{a:stepLabel, st:'err', t:msg}}); throw e; }
+      if (r?.url) pcLastUrl = r.url;
       if (r?.mensch_nötig){
         await live({url:r.url, titel:r.titel, schritt:{a:stepLabel, st:'lock', t:'Robotertest – bitte selbst im Browserfenster anklicken'}});
         sysLine('🤖 <b>Robotertest</b> auf ' + esc(r.url || 'der Seite') + ' – das darf nur ein Mensch lösen. Bitte im Browserfenster des PC-Agents kurz anklicken, JARVIS wartet.');

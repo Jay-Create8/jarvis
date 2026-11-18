@@ -129,6 +129,8 @@ async function robotCheck(data) {
   } catch {}
   return null;
 }
+const SE_MSG = 'Suchmaschinen (Google, Bing, DuckDuckGo …) zeigen ferngesteuerten Browsern Robotertests – hier nicht suchen. Nimm pc_browser suchen (läuft über die KI) und öffne danach die Website direkt.';
+function isSearchEngine(u) { try { const x = new URL(/^https?:/i.test(u) ? u : 'https://' + u); return /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|search\.yahoo\.com|ecosia\.org|startpage\.com|search\.brave\.com)$/i.test(x.hostname) && !/^\/maps/.test(x.pathname) && !/^consent\./i.test(x.hostname); } catch { return false; } }
 const SEARCH_URL = (q) => 'https://html.duckduckgo.com/html/?kl=ch-de&q=' + encodeURIComponent(q);
 async function el(id) {
   for (const f of page.frames()) { const h = f.locator(`[data-jv="${id}"]`).first(); if (await h.count().catch(() => 0)) return h; }
@@ -169,12 +171,12 @@ const handlers = {
     return { gelöst: false, hinweis: 'Der Robotertest ist noch da. Nicht selbst lösen – den Nutzer nochmal bitten oder einen anderen Weg nehmen (web_search, andere Seite).' };
   },
   async öffnen({ url }) { if (!/^https?:\/\//.test(url)) url = 'https://' + url;
-    // 5.9.4: Google search in a remote-controlled browser triggers robot tests → same search on DuckDuckGo instead
-    try { const u = new URL(url); if (/(^|\.)google\.[a-z.]+$/i.test(u.hostname) && /^\/(search|webhp)?$/.test(u.pathname) && u.searchParams.get('q')) return { umgeleitet: 'Google-Suche → DuckDuckGo (Google zeigt ferngesteuerten Browsern Robotertests)', ...(await handlers.suchen({ anfrage: u.searchParams.get('q') })) }; } catch {}
+    // 5.9.4.2: search engines show robot tests to remote-controlled browsers → never open them here (JARVIS searches through the AI)
+    if (isSearchEngine(url)) throw new Error(SE_MSG);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }); await page.waitForLoadState('load', { timeout: 5000 }).catch(() => {}); await page.waitForTimeout(600); return await read(); },
   async lesen() { return await read(); },
   async klicken({ id }) { const h = await el(id); await h.scrollIntoViewIfNeeded({ timeout: 5000 }); await Promise.all([page.waitForLoadState('domcontentloaded').catch(() => {}), h.click({ timeout: 10000 })]); await page.waitForTimeout(800); return await read(); },
-  async tippen({ id, text, enter }) { const h = await el(id); await h.fill(String(text ?? '')); if (enter) { await h.press('Enter'); await page.waitForLoadState('domcontentloaded').catch(() => {}); await page.waitForTimeout(1200); } return await read(); },
+  async tippen({ id, text, enter }) { if (enter && isSearchEngine(page.url())) throw new Error(SE_MSG); const h = await el(id); await h.fill(String(text ?? '')); if (enter) { await h.press('Enter'); await page.waitForLoadState('domcontentloaded').catch(() => {}); await page.waitForTimeout(1200); } return await read(); },
   async auswählen({ id, wert }) { const h = await el(id); await h.selectOption({ label: wert }).catch(() => h.selectOption(wert)); return await read(); },
   async scrollen({ richtung = 'unten' }) { await page.mouse.wheel(0, richtung === 'oben' ? -800 : 800); await page.waitForTimeout(500); return await read(); },
   async zurück() { await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {}); return await read(); },

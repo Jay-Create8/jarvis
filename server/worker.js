@@ -102,7 +102,19 @@ export async function startCall(env, origin, { anlass, nachricht, dringlichkeit 
   const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_SID}/Calls.json`, { method: 'POST', body, headers: { authorization: 'Basic ' + btoa(env.TWILIO_SID + ':' + env.TWILIO_TOKEN), 'content-type': 'application/x-www-form-urlencoded' } });
   const j = await r.json().catch(() => ({}));
   if (r.ok) { const log = await kvGet(env, 'calllog', []); log.push(Date.now()); await kvPut(env, 'calllog', log.slice(-200)); }
-  return r.ok ? { ok: true, art: 'telefonanruf (Twilio)', status: j.status, callSid: j.sid, hinweis: 'Twilio hat den Anruf angenommen. Ob abgehoben wurde, meldet der Server im Posteingang.' } : { ok: false, art: 'telefonanruf (Twilio)', grund: j.message || 'HTTP ' + r.status };
+  return r.ok ? { ok: true, art: 'telefonanruf (Twilio)', status: j.status, callSid: j.sid, hinweis: 'Twilio hat den Anruf angenommen. Ob abgehoben wurde, meldet der Server im Posteingang.' } : { ok: false, art: 'telefonanruf (Twilio)', grund: twilioGrund(j, r.status) };
+}
+
+// 5.9.4.2: Twilio errors in plain German with what to do (trial account, country not allowed, wrong key …)
+export function twilioGrund(j = {}, status = 0) {
+  const c = +j.code || 0, m = String(j.message || '');
+  if (c === 21219 || /unverified|trial account/i.test(m)) return 'Twilio-Testkonto: Anrufe gehen nur an bestätigte Nummern (z.B. dein Handy). Für Restaurants, Praxen usw. das Twilio-Konto aufwerten (Guthaben aufladen) – oder die Nummer bei Twilio unter „Verified Caller IDs“ bestätigen.';
+  if (c === 21215 || c === 13227 || /geo.?permission|not authorized to call|international permissions/i.test(m)) return 'Twilio darf in dieses Land noch nicht anrufen: bei Twilio unter Voice → Settings → Geo permissions „Switzerland“ (und ggf. Deutschland/Österreich) einschalten.';
+  if (c === 20003 || status === 401) return 'Twilio-Zugang falsch (Account SID oder Auth Token). Einrichtungs-Assistent nochmal starten und die Daten neu eingeben.';
+  if (c === 21210 || c === 21212) return 'Die Absender-Nummer gehört nicht zu deinem Twilio-Konto. Im Einrichtungs-Assistenten deine Twilio-Nummer neu eingeben.';
+  if (c === 21211 || c === 13224) return 'Diese Telefonnummer ist ungültig – bitte mit Ländervorwahl (z.B. +41 44 …).';
+  if (c === 20005 || /suspended|balance|funds/i.test(m)) return 'Twilio-Guthaben aufgebraucht oder Konto gesperrt – bei Twilio Guthaben aufladen.';
+  return m ? 'Twilio: ' + m : 'Twilio-Fehler (HTTP ' + status + ')';
 }
 
 /* ---------- 5.2: calls to THIRD parties (e.g. restaurant reservation) ---------- */
@@ -148,7 +160,7 @@ export async function startThirdCall(env, origin, { nummer, name = '', ziel = ''
   const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_SID}/Calls.json`, { method: 'POST', body, headers: { authorization: 'Basic ' + btoa(env.TWILIO_SID + ':' + env.TWILIO_TOKEN), 'content-type': 'application/x-www-form-urlencoded' } });
   const j = await r.json().catch(() => ({}));
   if (r.ok) { const log = await kvGet(env, 'thirdlog', []); log.push({ t: Date.now(), n: num }); await kvPut(env, 'thirdlog', log.slice(-200)); }
-  return r.ok ? { ok: true, id, nummer: num, status: j.status, hinweis: 'Twilio wählt. Das Gesprächsergebnis kommt in den Posteingang.' } : { ok: false, grund: j.message || 'HTTP ' + r.status };
+  return r.ok ? { ok: true, id, nummer: num, status: j.status, hinweis: 'Twilio wählt. Das Gesprächsergebnis kommt in den Posteingang.' } : { ok: false, grund: twilioGrund(j, r.status) };
 }
 const THIRD_TOOLS = [{ name: 'gespraech_beenden', description: 'Beendet das Telefonat, wenn das Ziel erreicht ist, klar nicht erreichbar ist oder das Gegenüber auflegen will.', input_schema: { type: 'object', properties: { erfolg: { type: 'boolean' }, abweichung: { type: 'boolean', description: 'true, wenn du eine Alternative statt des ursprünglichen Wunsches vereinbart hast' }, ergebnis: { type: 'string', description: 'Was genau vereinbart/erfahren wurde (Datum, Uhrzeit, Name, Bedingungen) oder warum nicht' }, abschied: { type: 'string' } }, required: ['erfolg', 'abweichung', 'ergebnis', 'abschied'], additionalProperties: false } }];
 export async function thirdTurn(env, call, heard) {

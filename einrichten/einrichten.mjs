@@ -86,12 +86,14 @@ console.log('  Gemini-Key (gratis): aistudio.google.com/apikey → „API-Schlü
 const gk = await askHidden('Gemini API-Key'); if (gk) { if (!/^AIza/.test(gk)) warn('Sieht nicht wie ein Gemini-Key aus (beginnt normalerweise mit AIza) – trotzdem gespeichert.'); secrets.GEMINI_API_KEY = gk; }
 console.log('  Optional: Anthropic-Key (kostet) – nur nötig, wenn du keinen Gemini-Key hast. Sonst einfach leer lassen.');
 const ak = await askHidden('Anthropic API-Key'); if (ak) { if (!/^sk-ant-/.test(ak)) warn('Sieht nicht wie ein Anthropic-Key aus (beginnt normalerweise mit sk-ant-) – trotzdem gespeichert.'); secrets.ANTHROPIC_API_KEY = ak; }
-console.log('  Echte Anrufe kosten bei Twilio: Nummer ab ca. 1.15 $/Monat (eine Schweizer Handynummer kostet 11.70 $ – zu teuer für 5 Fr.),\n' +
-  '  Anruf aufs Festnetz ca. 0.04 $/Min., aufs Handy ca. 0.18–0.25 $/Min. JARVIS stoppt vor deinem Telefon-Budget (Einstellung in der App).');
+console.log('  Echte Anrufe gehen über Twilio (twilio.com):\n' +
+  '  • TESTKONTO (gratis, ohne Karte): JARVIS kann DICH anrufen (nur deine bestätigte Nummer, vorher kommt eine kurze englische Ansage).\n' +
+  '  • Für Anrufe bei Restaurants, Praxen usw. braucht es ein bezahltes Konto (Zahlungsmittel bei Twilio, Guthaben vorher aufladen).\n' +
+  '    Kosten: Nummer ca. 1.15 $/Monat, Festnetz ca. 0.04 $/Min., Handy ca. 0.18–0.25 $/Min. JARVIS stoppt vor deinem Telefon-Budget (App).');
 if (await yes('Echte Telefonanrufe über Twilio einrichten?', 'n')) {
   secrets.TWILIO_SID = await ask('Twilio Account SID (AC…)'); secrets.TWILIO_TOKEN = await askHidden('Twilio Auth Token');
   secrets.TWILIO_FROM = await ask('Deine Twilio-Nummer (+1… oder +41…)'); secrets.USER_PHONE = await ask('Deine Handynummer (+41…)');
-  const fee = parseFloat(String(await ask('Was kostet diese Nummer pro Monat (in $, steht bei Twilio)?', '1.15')).replace(',', '.'));
+  const fee = parseFloat(String(await ask('Was kostet diese Nummer pro Monat (in $; Testkonto-Nummer = 0)?', '1.15')).replace(',', '.'));
   if (isFinite(fee) && fee >= 0 && fee <= 50) st.nummerUsd = fee;
   for (const k of ['TWILIO_SID', 'TWILIO_TOKEN', 'TWILIO_FROM', 'USER_PHONE']) if (!secrets[k]) delete secrets[k];
 }
@@ -136,6 +138,11 @@ try {
 } catch (e) { warn('Server antwortet noch nicht (' + e.message + '). Das kann nach dem ersten Hochladen bis zu einer Minute dauern.'); }
 
 // 7 – app website
+// 5.9.4.2: app-url.txt → use the JARVIS app you already have (and the APK) instead of publishing a second copy with its own settings
+const APP_URL_FILE = path.join(ROOT, 'app-url.txt');
+let appUrl = fs.existsSync(APP_URL_FILE) ? fs.readFileSync(APP_URL_FILE, 'utf8').trim().replace(/\/$/, '') : '';
+if (appUrl) { step(7, 'JARVIS-App'); ok('deine bestehende App: ' + appUrl); }
+else {
 step(7, 'JARVIS-App als Website veröffentlichen');
 st.pagesName ||= 'jarvis-' + crypto.randomBytes(3).toString('hex'); save();
 const APPDIR = path.join(HERE, '.app-upload'); fs.rmSync(APPDIR, { recursive: true, force: true }); fs.mkdirSync(APPDIR);
@@ -145,8 +152,9 @@ run(['pages', 'project', 'create', st.pagesName, '--production-branch', 'main'],
 const p = run(['pages', 'deploy', APPDIR, '--project-name', st.pagesName, '--branch', 'main', '--commit-dirty=true'], { cwd: HERE });
 fs.rmSync(APPDIR, { recursive: true, force: true });
 if (p.code !== 0) die('App-Veröffentlichung fehlgeschlagen:\n' + p.out.slice(-800));
-const appUrl = `https://${st.pagesName}.pages.dev`; st.appUrl = appUrl; save();
+appUrl = `https://${st.pagesName}.pages.dev`; st.appUrl = appUrl; save();
 ok('App: ' + appUrl + c.y('  (die ersten 1–2 Minuten kann die Adresse noch „nicht gefunden“ zeigen)'));
+}
 
 // 8 – connect phone + laptop
 step(8, 'Handy verbinden');
@@ -154,6 +162,7 @@ const setup = Buffer.from(JSON.stringify({ srv: url, srvTok: appTok, ntfy: st.nt
 const link = `${appUrl}/#einrichten=${setup}`;
 try { const q = (await import('qrcode-terminal')).default; console.log('\n  Am Handy mit der Kamera scannen (öffnet JARVIS bereits verbunden):\n'); q.generate(link, { small: true }); }
 catch { console.log('\n  Diesen Link am Handy öffnen (z.B. per Mail an dich selbst schicken):\n  ' + link); }
+console.log('\n  Am Laptop: diesen Link im Browser öffnen, in dem du JARVIS benutzt:\n  ' + link);
 console.log(`\n  Danach in JARVIS: Einstellungen → KEY EINFÜGEN – gratis: Gemini-Key von aistudio.google.com/apikey (oder Anthropic-Key, kostet). Der Key bleibt nur auf dem Handy.\n  Push: ntfy-App installieren und das Thema ${c.b(st.ntfy || '(bestehendes)')} abonnieren.`);
 if (await yes('Zugangsdaten zusätzlich in JARVIS-Zugang.txt auf diesem Rechner speichern (Backup)?', 'n'))
   fs.writeFileSync(path.join(HERE, 'JARVIS-Zugang.txt'), `JARVIS-Zugang (geheim halten!)\nApp: ${appUrl}\nServer: ${url}\nServer-Token (App): ${appTok}\nPush-Thema (ntfy): ${st.ntfy}\nEinrichtungs-Link: ${link}\n`, { mode: 0o600 });

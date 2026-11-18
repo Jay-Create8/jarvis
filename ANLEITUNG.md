@@ -1,4 +1,10 @@
-# J.A.R.V.I.S. 5.9.4 🤖
+# J.A.R.V.I.S. 5.9.4.2 🤖
+
+> **5.9.4.2:** **Anrufe einfach einrichten:** Einstellungen → PROAKTIVITÄT & KONTAKT → „📥 Einrichtung herunterladen“ → entpacken →
+> `einrichten/JARVIS-einrichten.cmd` doppelklicken (keine Admin-Rechte). Der Assistent nimmt deine bestehende JARVIS-App (kein zweiter
+> Ableger mehr) und erklärt Twilio: Testkonto gratis ohne Karte → JARVIS kann **dich** anrufen; Restaurants/Praxen → bezahltes Konto.
+> Twilio-Fehler kommen auf Deutsch mit Lösung. **Google:** wird nie mehr im ferngesteuerten Browser geöffnet (weder per Adresse noch
+> per Suchfeld) – gesucht wird über die KI, darum kein Robotertest mehr.
 
 > **5.9.4: Mehr Assistent.** ① **Dateien am Laptop:** Mit dem neuen PC-Agent darf JARVIS in deinem ganzen Benutzerordner arbeiten –
 > Downloads, Desktop, Dokumente, OneDrive, alle Unterordner: aufräumen/sortieren, suchen („wo ist meine Bewerbung?“), Word/PowerPoint

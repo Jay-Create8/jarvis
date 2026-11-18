@@ -162,3 +162,21 @@ Sortieren geben, und er ist Gemini, also Google – wieso weiss er nichts über 
 Dein Screenshot: „kann diesen Ordner nicht öffnen, weil er Systemdateien enthält“ – das ist die Browser-Sperre für Downloads/Desktop/
 Dokumente (der alte Weg ohne PC-Agent). Jetzt: Ist ein PC-Agent-Token eingetragen, versucht JARVIS zuerst, den Agent zu verbinden, und
 nimmt dann ihn. Ohne Agent sagt das Freigabe-Fenster gleich, dass diese Ordner gesperrt sind und wie es mit dem PC-Agent geht. Test F1 ✅, D1 ✅.
+
+## 5.9.4.2 – Anrufe einrichten, Google ohne Robotertest
+Deine Rückmeldung: „Jetzt alles mit Anrufen, er soll wirklich alles können, darf 5 Fr. kosten – in Google kommt immer noch ein Test.“
+
+| Was | Wie | Kategorie |
+|---|---|---|
+| Google-Robotertest | JARVIS öffnet Suchmaschinen **nie** im ferngesteuerten Browser – weder per Adresse („google.com/search?q=…“ wird zur Google-Suche über die KI) noch per Suchfeld (Enter auf einer Suchseite wird abgefangen); google.com ohne Suche wird abgelehnt. Der PC-Agent sperrt es zusätzlich selbst. Mit Claude statt Gemini nimmt JARVIS seine eigene Websuche. | ✅ |
+| Anrufe einrichten | Neuer Download „📥 Einrichtung herunterladen“ (46 KB) in den Einstellungen: Assistent (Doppelklick, ohne Admin) + Server. Er nutzt jetzt deine **bestehende** App (vorher veröffentlichte er eine zweite Kopie mit eigenen Einstellungen – das hätte verwirrt) und zeigt den Verbindungs-Link für Handy **und** Laptop. | ✅ simuliert (Cloudflare nachgestellt) |
+| Twilio ehrlich erklärt | Testkonto: gratis, ohne Karte – JARVIS ruft **dich** an (nur bestätigte Nummer, vorher kurze englische Ansage). Restaurants/Praxen: bezahltes Konto (Zahlungsmittel, Guthaben vorher aufladen). Twilio verlangt beim Aufwerten Name/Telefon, evtl. Ausweis; ein bezahltes Konto braucht wohl Volljährigkeit (sonst über die Eltern). | Info |
+| Twilio-Fehler auf Deutsch | Testkonto-Sperre, Land nicht freigeschaltet (Twilio: Voice → Settings → Geo permissions → „Switzerland“), falscher Zugang, falsche Nummer, Guthaben leer – je mit Lösung | ✅ Server-Test |
+
+**Tests:** Server **32/32** (neu: Twilio-Fehler) · PC-Agent Dateien **15/15** (neu: Suchmaschinen gesperrt) · App G2 (Google → KI-Suche) ✅ · D2 ✅ ·
+Einrichtungs-Assistent aus dem ZIP mit nachgestelltem Cloudflare ✅ (Speicher, Server, Schlüssel inkl. Twilio, Link auf deine App, kein Pages-Upload).
+**Gesamt:** Gemini-Übersetzer 9/9 · Server 32/32 · 5.9 im Browser **18/18** · 5.8 im Browser 18/20 · PC-Agent Dateien 15/15 · Reservierung 9/9 · alte Regression 38/39 (Open-Meteo HTTP 429, extern).
+Die 2 roten 5.8-Tests sind die Lader-Tests für extrem schlechtes Netz (8 KB/s mit 40 % Abbrüchen, Neuladen mitten im Laden): in der ganzen Reihe rot, **einzeln grün** (B1: 75 s, 9 Abbrüche überstanden). Auf deinen Wunsch („ignoriere schlechtes Netz“) nicht weiter untersucht.
+
+**Was du selbst tun musst (kann ich nicht für dich):** Cloudflare-Konto (gratis) und Twilio-Konto anlegen. Echte Anrufe sind erst getestet,
+wenn du sie mit deinem Konto ausprobiert hast.
