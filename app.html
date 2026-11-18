@@ -381,7 +381,7 @@ body.immersive #chatToggle{display:grid}
   <div class="field"><label>Anruf-Budget pro Monat (USD, geschätzt)</label><input id="cBudget" type="number" min="0" max="200" step="1"></div>
   <div class="field"><label>Deine Kontaktregeln</label><textarea id="cfgRules" placeholder="z.B. Nach 22 Uhr nur bei Notfällen anrufen. Börsen-News nur per Push."></textarea></div>
   <h3>PC-AGENT (WEBSITES BEDIENEN)</h3>
-  <p class="hint">Starte am PC <b>desktop-agent</b> (siehe Anleitung) und trage das angezeigte Token ein. Dann kann JARVIS echte Websites bedienen. Kaufen, Buchen, Bezahlen oder Absenden fragt immer zuerst dich.</p>
+  <p class="hint">Damit kann JARVIS am Laptop echte Websites bedienen (suchen, Formulare ausfüllen, Reservierungen vorbereiten). <a href="JARVIS-PC-Agent.zip" download id="agentZip">📥 PC-Agent herunterladen</a> (ZIP, ca. 12 KB) → entpacken → Doppelklick auf <b>PC-Agent-starten.cmd</b> (Mac: .command). <b>Keine Admin-Rechte nötig</b> – nimmt Edge/Chrome, das schon auf dem PC ist. Dann das angezeigte Token hier eintragen. Kaufen, Buchen, Bezahlen oder Absenden fragt immer zuerst dich.</p>
   <div class="field"><label>PC-Agent Token</label><input id="cfgAgent" type="password" autocomplete="off"></div>
   <button class="btn" id="connectAgent">VERBINDEN</button> <span class="hint" id="agentState">nicht verbunden</span>
   <h3>SELBSTTEST 5.1 (ECHTE KI)</h3>
@@ -1511,7 +1511,7 @@ async function agentCallRemote(aktion, args){
 function agentCall(aktion, args = {}){
   if ((!agentWs || agentWs.readyState !== 1) && cfg.agentRemote && cfg.srv && cfg.srvTok) return agentCallRemote(aktion, args);
   return new Promise((res, rej) => {
-    if (!agentWs || agentWs.readyState !== 1) return rej(new Error('PC-Agent nicht verbunden. Am PC "desktop-agent" starten und das Token in den Einstellungen eintragen – oder für unterwegs den Fernmodus über den JARVIS-Server einrichten.'));
+    if (!agentWs || agentWs.readyState !== 1) return rej(new Error('PC-Agent nicht verbunden. Am Laptop: Einstellungen → PC-Agent → „PC-Agent herunterladen“, entpacken, Doppelklick auf PC-Agent-starten.cmd (keine Admin-Rechte nötig) und das Token eintragen.'));
     const rid = Math.random().toString(36).slice(2);
     agentReq.set(rid, m => m.ok ? res(m.data) : rej(new Error(m.data)));
     agentWs.send(JSON.stringify({rid, aktion, args}));
@@ -2091,6 +2091,7 @@ function gemRetryNote(r){
     : r.grund === 'verbindung' ? `📶 Verbindung zu Google unterbrochen – neuer Versuch ${r.versuch}/${r.von} in ${r.sekunden} s.` : `⏳ Google ist kurz überlastet – neuer Versuch in ${r.sekunden} s.`);
 }
 function gemErrorText(e){
+  if (e.status >= 500 || /overloaded|high demand|UNAVAILABLE/i.test(e.message || '')) return 'Google ist gerade überlastet (die Gratis-Version kommt bei viel Betrieb zuletzt dran). Ich habe es mehrmals und mit beiden Gemini-Modellen versucht. Schick die Nachricht in einer Minute nochmal' + (hasClaude() ? ' – oder stell in den Einstellungen „Immer Claude“ ein, das ist zuverlässiger.' : ' – zuverlässiger wird es mit einem Claude-Key (Kostendeckel 5 Fr.).');
   if (e.perDay) return 'Das Gratis-Kontingent von Google ist für heute aufgebraucht. Es setzt sich jeden Tag um ca. 9 Uhr (Schweizer Zeit) zurück.' + (hasClaude() && !cfg.gemFallbackClaude ? ' Wenn du willst: Einstellungen → „Bei Gemini-Limit Claude nutzen“ (kostet).' : '');
   if (e.reason === 'API_KEY_INVALID' || /API key not valid/i.test(e.message)) return 'Der Gemini-Key ist ungültig. Bitte in den Einstellungen prüfen (aistudio.google.com → API-Schlüssel).';
   if (/location is not supported/i.test(e.message)) return 'Google bietet die Gemini-API an deinem Standort gerade nicht an.';
@@ -2261,7 +2262,7 @@ Du hast ein eigenes visuelles Interface (Werkzeug ui) mit Live-3D und darfst es 
 - Zahlen, Vergleiche, Trends, Analysen → chart oder dashboard ; Recherche-Ergebnisse → dashboard/info als Abschluss-Präsentation
 - Mehrstufige Aufgaben → tasks; aktualisiere jeden Schritt ehrlich (running → done/error)
 - Auswahl, Angebote, Buchungsvorbereitung → options (Status "VORBEREITET · NICHT GEBUCHT")
-- Termine → calendar-Werkzeug ; Dateien ordnen → files-Werkzeug ; Websites bedienen (Reservieren, Bestellen vorbereiten, Formulare) → pc_browser (nur wenn PC-Agent verbunden; sonst ehrlich sagen und Link öffnen)
+- Termine → calendar-Werkzeug ; Dateien ordnen → files-Werkzeug ; Websites bedienen (Reservieren, Bestellen vorbereiten, Formulare) → pc_browser (nur wenn PC-Agent verbunden; sonst ehrlich sagen, wie man ihn bekommt: Einstellungen → PC-Agent → „PC-Agent herunterladen“, entpacken, Doppelklick – keine Admin-Rechte nötig – und den Link öffnen)
 Ein [Visual-Planer: …]-Hinweis in der Nutzernachricht ist eine Empfehlung deines Planungsmoduls – folge ihr in der Regel. Bei Rückfragen verwendest du offene Fenster weiter (Befehle, patch, aktualisieren) statt neu anzufangen. Halte die Oberfläche aufgeräumt: maximal ~3 Fenster, aktualisiere bestehende Fenster statt neue zu öffnen, schliesse Veraltetes selbst. Auf grossen Bildschirmen ordnen sich Fenster automatisch an (das fokussierte bekommt den grössten Platz); mit aktion verschieben kannst du eines gezielt platzieren (links/rechts/oben/unten/mitte), mit fokus nach vorne holen.
 
 ## Live-Visualisierung echter Arbeit (Grundprinzip)
@@ -2404,7 +2405,7 @@ async function runAgent(){
           if (state === 'think' && !ttsQueue) setState(cfg.speak ? 'think' : 'speak');
         }
       };
-      curModel = model;
+      curModel = model; const triedG = new Set();
       if (!isG && cfg.sparmodus && budgetBlocked()){   // 5.9: hard cap – never one more paid request
         if (gemKey()){ prov = 'gemini'; isG = true; model = gemModel(); c = null; lastModelUsed = model; sysLine('💰 Claude-Anteil des Kostendeckels aufgebraucht – Gemini macht gratis weiter.'); }
         else throw Object.assign(new Error('Kostendeckel erreicht'), {budget:true});
@@ -2419,9 +2420,11 @@ async function runAgent(){
             const s = c.beta.messages.stream(claudeParams()); s.on('streamEvent', onEv); msg = await s.finalMessage(); trackUsage(msg.model || model, msg.usage);
           }
         }catch(e){
-          if (isG && e.perDay && att < 3){   // free daily quota used up → other Gemini model (own quota), then Claude only if you allowed it
-            gemExhausted(model); const alt = gemAlt(model);
-            if (alt){ sysLine(`🔁 Gratis-Kontingent für ${esc(model)} heute aufgebraucht – ich wechsle auf ${esc(alt)}.`); model = alt; lastModelUsed = model; continue; }
+          const busyG = isG && !e.perDay && (e.status >= 500 || /overloaded|high demand|UNAVAILABLE/i.test(e.message || ''));   // 5.9.3: Google overloaded (free users come last)
+          if (isG && (e.perDay || busyG) && att < 3){   // quota used up or overloaded → other Gemini model (own quota, often less busy), then Claude only if you allowed it
+            if (e.perDay) gemExhausted(model); triedG.add(model);
+            const i = gemInfo || {}, alt = [i.lite, i.flash, GEM_DEFAULT].find(m => m && !triedG.has(m) && !gemUseToday().aus.includes(m));
+            if (alt){ sysLine(e.perDay ? `🔁 Gratis-Kontingent für ${esc(model)} heute aufgebraucht – ich wechsle auf ${esc(alt)}.` : `🔁 ${esc(model)} ist gerade überlastet – ich versuche es mit ${esc(alt)}.`); model = alt; lastModelUsed = model; continue; }
             if (cfg.gemFallbackClaude && hasClaude()){
               try{ await loadSdk(); }catch{}
               c = getClient();
@@ -3161,7 +3164,7 @@ $('#runSelfTest').onclick = () => selfTest();
 /* 5.6: one button – all permissions + maximum freedom */
 $('#pasteKey').onclick = async () => {
   try{ const t = (await navigator.clipboard.readText()).trim();
-    if (/^sk-ant-[\w-]{20,}$/.test(t)){ $('#cfgKey').value = t; toast('🔑 Anthropic-Key eingefügt – jetzt „ALLES FREISCHALTEN“.'); }
+    if (/^sk-ant-[\w-]{20,}$/.test(t)){ $('#cfgKey').value = t; cfg.provider = 'claude'; const ps = document.querySelector('#settings [data-k="provider"]'); if (ps) ps.value = 'claude'; store.set('cfg', cfg); toast('🔑 Claude-Key eingefügt – JARVIS denkt ab jetzt mit Claude (Kostendeckel bleibt). Jetzt „ALLES FREISCHALTEN“.'); }
     else if (/^AIza[\w-]{30,}$/.test(t)){ $('#cfgGemKey').value = t; cfg.gemKey = t; store.set('cfg', cfg); toast('🆓 Gemini-Key eingefügt – ich prüfe ihn kurz …');
       try{ const i = await gemSetup(true); toast(`✅ Gemini-Key funktioniert (${i.lite}). Jetzt „ALLES FREISCHALTEN“.`); }catch(e){ toast(gemErrorText(e)); } fillGemNow(); }
     else toast('In der Zwischenablage ist kein Key. Gratis: aistudio.google.com/apikey → „API-Schlüssel erstellen“ → kopieren.'); }

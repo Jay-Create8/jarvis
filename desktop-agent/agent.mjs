@@ -1,6 +1,7 @@
 /* =====================================================================
    JARVIS PC-AGENT – lässt JARVIS echte Websites bedienen (Chrome/Chromium via Playwright)
-   Start:  npm install && npx playwright install chromium && npm start
+   Start:  Doppelklick auf PC-Agent-starten.cmd (Windows) bzw. PC-Agent-starten.command (Mac/Linux) – keine Admin-Rechte nötig
+           (von Hand: npm install && npm start)
    Sicherheit:
    - lauscht nur auf 127.0.0.1, verlangt ein Token (wird beim Start angezeigt)
    - verbindliche Aktionen (kaufen, bestellen, buchen, bezahlen, absenden …) werden
@@ -10,6 +11,9 @@
 import { chromium } from 'playwright';
 import { WebSocketServer } from 'ws';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 const PORT = +(process.env.JARVIS_AGENT_PORT || 47321);
 const TOKEN = process.env.JARVIS_AGENT_TOKEN || crypto.randomBytes(9).toString('base64url');
@@ -18,7 +22,38 @@ const CHECKOUT_PAGE = /(checkout|kasse|payment|zahlung|bezahl|order|bestell|book
 const CONFIRM_WORDS = /(finish|complete|confirm|place|pay|abschlie|bestätig|weiter zur zahlung|jetzt|fertig)/i;
 const SENSITIVE = /(kauf|bestell|bezahl|zahlungspflichtig|kostenpflichtig|buchen|buchung abschl|reserv|pay|purchase|place order|confirm order|absenden|abschicken|senden|überweis|vertrag|abonn|kündig|löschen|delete)/i;
 
-const launch = () => chromium.launchPersistentContext(new URL('./profil', import.meta.url).pathname, { headless: HEADLESS, viewport: { width: 1280, height: 860 }, locale: 'de-CH' });
+// 5.9.3: use the browser that is already on the PC (Windows: Edge is always there) → no 150 MB download, no admin rights.
+// Only if none is found, Playwright's own Chromium is downloaded once (into the user folder, also without admin rights).
+// fileURLToPath instead of URL.pathname: on Windows pathname gives "/C:/…" and "%20" for spaces in the folder name.
+const here = (f) => fileURLToPath(new URL(f, import.meta.url));
+const OPTS = { headless: HEADLESS, viewport: { width: 1280, height: 860 }, locale: 'de-CH' };
+const WANT = (process.env.JARVIS_BROWSER || '').trim();
+const CANDIDATES = WANT ? [/[\\/]/.test(WANT) ? { name: 'eigener Browser', dir: 'profil-eigen', executablePath: WANT } : { name: WANT, dir: WANT === 'chromium' ? 'profil' : 'profil-' + WANT, channel: WANT === 'chromium' ? undefined : WANT }]
+  : [...(process.platform === 'win32' ? ['msedge', 'chrome'] : ['chrome', 'msedge']).map((c) => ({ name: c === 'msedge' ? 'Microsoft Edge' : 'Google Chrome', dir: 'profil-' + c, channel: c })), { name: 'Chromium', dir: 'profil' }];
+let chosen = null;
+const missing = (e) => /executable doesn't exist|is not found|not found at|chromium distribution .* is not found|no such file/i.test(e?.message || '');
+function installChromium() {
+  const cli = here('./node_modules/playwright/cli.js');
+  console.log('⬇️  Kein Chrome/Edge gefunden – lade einmalig den JARVIS-Browser (ca. 150 MB, ohne Admin-Rechte) …');
+  if (+process.versions.node.split('.')[0] > 24) console.log('⚠️  Node.js ' + process.version + ' ist neuer als getestet (bei v26 hing das Entpacken). Am besten über den Starter (PC-Agent-starten) öffnen – der nimmt v24.');
+  const r = existsSync(cli) ? spawnSync(process.execPath, [cli, 'install', 'chromium'], { stdio: 'inherit', timeout: 20 * 60e3 }) : { status: 1 };
+  return r.status === 0;
+}
+async function launch() {
+  if (chosen) return chromium.launchPersistentContext(here('./' + chosen.dir), { ...OPTS, channel: chosen.channel, executablePath: chosen.executablePath });
+  let last;
+  for (const c of CANDIDATES) {
+    try {
+      const x = await chromium.launchPersistentContext(here('./' + c.dir), { ...OPTS, channel: c.channel, executablePath: c.executablePath });
+      chosen = c; console.log('🌐 Browser: ' + c.name); return x;
+    } catch (e) {
+      last = e;
+      if (!c.channel && !c.executablePath && missing(e) && installChromium()) { const x = await chromium.launchPersistentContext(here('./' + c.dir), OPTS); chosen = c; console.log('🌐 Browser: ' + c.name); return x; }
+    }
+  }
+  console.error('\n❌ Konnte keinen Browser starten: ' + String(last?.message || last).split('\n')[0] + '\n   Tipp: Chrome oder Edge öffnen können? Dann PC-Agent neu starten. Auf Schul-/Firmengeräten sperrt die IT so etwas manchmal.');
+  process.exit(1);
+}
 let ctx = await launch();
 let page = ctx.pages()[0] || (await ctx.newPage());
 let closed = false; ctx.on('close', () => { closed = true; });

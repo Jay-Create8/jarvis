@@ -1,4 +1,8 @@
-# J.A.R.V.I.S. 5.9.2 🤖
+# J.A.R.V.I.S. 5.9.3 🤖
+
+> **5.9.3:** **PC-Agent ohne Admin-Rechte:** In der App unter Einstellungen → PC-AGENT auf „📥 PC-Agent herunterladen“ tippen, ZIP entpacken,
+> Doppelklick auf `PC-Agent-starten.cmd`. Node.js kommt als portable Version mit, als Browser nimmt er das Edge/Chrome, das schon auf dem PC ist.
+> Ausserdem: Ist Google gerade **überlastet** („high demand“), wartet JARVIS kurz und weicht automatisch aufs andere Gemini-Modell aus.
 
 > **5.9.2:** Neue **JARVIS-Stimme direkt auf dem Handy** – ohne Konto, ohne Kreditkarte, ohne Limit, gratis. Einmal ca. 90 MB laden (im WLAN automatisch, sonst Einstellungen → STIMME → „🎙️ JARVIS-STIMME LADEN“), danach spricht JARVIS damit jede Antwort.
 

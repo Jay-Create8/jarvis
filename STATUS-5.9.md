@@ -81,3 +81,41 @@ Karlsson (männlich), Kerstin, Ramona (weiblich).
 | Alle anderen Stimmen (Gemini, Azure, ElevenLabs, Vergleichen) | ✅ 5/5 |
 | 5.9-Tests gesamt | **11/11** |
 Ungetestet: Klang und Tempo auf deinem echten Handy.
+
+## 5.9.3 – PC-Agent ohne Admin-Rechte + Google überlastet
+**Problem 1:** Am Laptop ohne Admin-Rechte liess sich der PC-Agent nicht einrichten (Node.js installieren braucht Admin).
+**Lösung:** In der App unter Einstellungen → PC-AGENT gibt es jetzt **„📥 PC-Agent herunterladen“** (ZIP, 12 KB). Entpacken,
+Doppelklick auf `PC-Agent-starten.cmd` (Mac/Linux: `.command`). Der Starter
+- nimmt ein vorhandenes Node.js 20–24, sonst lädt er **Node.js v24 portabel** in den Ordner (nichts wird installiert);
+- der Agent nimmt den **Browser, der schon auf dem PC ist** (Windows: Edge, sonst Chrome) mit eigenem Profil – kein 150-MB-Download.
+  Nur wenn keiner da ist, lädt er einmalig Chromium in den Benutzerordner (ebenfalls ohne Admin);
+- macht nach einem abgebrochenen Download beim nächsten Doppelklick einfach weiter.
+Gleiches für den Einrichtungs-Assistenten (`JARVIS-einrichten.cmd`), er nutzt das portable Node.js des PC-Agents mit.
+
+**Problem 2:** Google meldete „This model is currently experiencing high demand“ – JARVIS zeigte die englische Rohmeldung.
+**Lösung:** JARVIS wartet kurz (3 s, 6 s), weicht dann **automatisch aufs andere Gemini-Modell** aus (Flash-Lite ↔ Flash) und sagt
+das kurz. Sind alle überlastet: deutsche Meldung „Google ist gerade überlastet …“ statt Englisch.
+
+**Dabei gefundene und behobene Fehler**
+| Fehler | Behebung |
+|---|---|
+| Mit dem neusten Node.js **v26** hing das Entpacken des Ersatz-Browsers (Download fertig, dann 10 Minuten nichts) – mit v24 in 29 s fertig | Starter nehmen fest **Node.js v24** (LTS bis 2028); Agent warnt bei neuerem Node.js, Abbruch nach 20 Min. statt ewig hängen |
+| Ordner mit **Leerzeichen** (z.B. `C:\Users\Vorname Nachname\…`): Browserprofil landete unter falschem Pfad (`%20`, `/C:/…`) | Pfad wird jetzt korrekt umgewandelt |
+| Abgebrochener Browser-Download → Agent startete nie mehr (Starter prüfte nur, ob `node_modules` da ist) | Agent prüft selbst und lädt fehlende Teile nach |
+| Das neue npm blockiert Installations-Skripte | geprüft: Server-Bündel für Cloudflare entsteht trotzdem korrekt (1127 KB) |
+
+| Test (echt, auf Linux, ohne vorinstalliertes Node.js im Pfad, ohne Admin) | Ergebnis |
+|---|---|
+| ZIP entpacken → `PC-Agent-starten.command`: Node.js v24 portabel laden, einrichten, Chromium laden, Token anzeigen | ✅ in 35 s (schnelle Leitung) |
+| Zweiter Start: nichts wird nochmal geladen, vorhandenes Chrome wird genommen | ✅ |
+| Abgebrochener Browser-Download → nächster Start räumt auf und lädt neu | ✅ |
+| PC-Agent-Sicherheitsprüfung (Cookie-Banner, iframe-Formular, Absenden gesperrt, falscher Code gesperrt) mit vorhandenem Chrome **und** mit nachgeladenem Chromium | ✅ 9/9 + 9/9 |
+| Einrichtungs-Assistent startet mit portablem Node.js bis zur Cloudflare-Anmeldung (dort gestoppt, kein Konto hier) | ✅ |
+| App: Werkzeug ohne PC-Agent sagt JARVIS, wie man ihn ohne Admin holt; Download-Knopf liefert das echte ZIP (A2) | ✅ |
+| App: Google überlastet → Ausweichen aufs andere Modell, sonst deutsche Meldung (O1) | ✅ |
+
+| Gesamte Testreihe nach dem Umbau | Gemini-Übersetzer **9/9** · Server **31/31** · 5.9 im Browser **13/13** · 5.8 im Browser **20/20** · alte Regression **38/39** – der eine rote Test fragt das echte Wetter bei Open-Meteo ab, das hier wieder „HTTP 429 – zu viele Anfragen“ (geteilte IP) lieferte; extern, wie bei 5.9 |
+
+**Ungetestet (⚪):** Die Windows-Dateien (`.cmd`, PowerShell) konnten hier nicht laufen – es gibt in dieser Umgebung kein Windows.
+Sie machen dasselbe wie der getestete Mac/Linux-Starter. Auf Schul-/Firmen-Laptops kann die IT Programme aus dem Download-Ordner,
+PowerShell oder die Fernsteuerung von Edge sperren – dann erscheint eine Meldung, lösen kann das nur die IT.
