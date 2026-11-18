@@ -398,7 +398,7 @@ body.immersive #chatToggle{display:grid}
   <div class="toggle"><div>Kontext vorladen<small>Wetter (nur wenn Standort schon erlaubt), Termine und Timer liegen bei jeder Frage bereit → schnellere Antworten.</small></div><input type="checkbox" data-k="ctxPrefetch"></div>
   <div class="field"><label>Farbthema</label><select data-k="theme"><option value="holo">Holo (Cyan)</option><option value="warm">Warm (Orange, wie im Video)</option></select></div>
   <div class="field"><label>Automatisches Briefing (leer = aus)</label><div style="display:flex;gap:8px"><input type="time" data-k="briefMorning" title="Morgen"><input type="time" data-k="briefEvening" title="Abend"></div><p class="hint">Morgen / Abend. Läuft, wenn die App offen ist oder innerhalb von 3 Stunden geöffnet wird. Mit JARVIS-Server zusätzlich als Push, auch bei geschlossener App. Kostenlos: wird ohne KI aus deinen Daten (Wetter, Termine, Offenes) zusammengestellt und mit der Gerätestimme vorgelesen.</p></div>
-  <div class="toggle"><div>Handsteuerung (Kamera)<small>Greifen + ziehen = drehen · zwei Hände greifen = zoomen · offene Hand halten = zerlegen · Faust halten = zusammensetzen. Bilder bleiben auf dem Gerät.</small></div><input type="checkbox" data-k="handCtl"></div>
+  <div class="toggle"><div>Handsteuerung erlauben (Kamera)<small>Die Kamera läuft NICHT dauernd: Sie geht nur an, wenn ein 3D-Modell offen ist oder du „Handsteuerung an“ sagst, und nach 1 Minute ohne Hand wieder aus. Greifen + ziehen = drehen · zwei Hände greifen = zoomen · offene Hand halten = zerlegen · Faust halten = zusammensetzen. Bilder bleiben auf dem Gerät.</small></div><input type="checkbox" data-k="handCtl"></div>
   <div class="toggle"><div>PC-Agent über Server (unterwegs)<small>Steuert deinen Laptop vom Handy aus über deinen JARVIS-Server. Am Laptop: Agent mit JARVIS_SERVER starten (siehe Anleitung).</small></div><input type="checkbox" data-k="agentRemote"></div>
   <p class="hint">Optional, mit deinem eigenen Konto. Gratis-Stufen wählen (ElevenLabs „Free“, Azure „Free F0“) – dann kann nichts kosten. Keys liegen nur in diesem Browser.</p>
   <div class="field"><label>Azure Speech-Key (gratis mit Stufe F0)</label><input type="password" data-k="azKey" autocomplete="off"></div>
@@ -1887,6 +1887,15 @@ Alle: daten.status (Badge), daten.progress (0–100).`,
       input_schema:S({stufe:{type:'string', enum:['hinweis','push','anruf']}, titel:{type:'string'}, nachricht:{type:'string'}, dringlichkeit:{type:'string', enum:['normal','hoch','notfall']}}, ['stufe','nachricht'])},
     async run(i){ return await contactUser(i); }
   },
+  handsteuerung: {
+    label:'HANDSTEUERUNG',
+    def:{description:'Schaltet die Kamera für die Handsteuerung ein oder aus (3D-Modelle mit der Hand drehen, zoomen, zerlegen). Die Kamera läuft nie dauernd: an = für bis zu 10 Minuten, geht nach 1 Minute ohne Hand von selbst aus. Für ein Foto („was siehst du“) nimm look_with_camera.', input_schema:S({an:{type:'boolean'}}, ['an'])},
+    async run({an}){
+      if (!an){ handManualUntil = 0; handSnooze = view3D(); stopHands(); return {kamera:'aus'}; }
+      handManualUntil = Date.now() + 10 * 60e3; handSnooze = ''; await toggleHands(true);
+      return handCam ? {kamera:'an', hinweis:'Geht nach 1 Minute ohne Hand oder spätestens nach 10 Minuten wieder aus.'} : {kamera:'aus', fehler:'Kamera nicht verfügbar oder nicht erlaubt'};
+    }
+  },
   agenten_buero: {
     label:'AGENTEN-BÜRO',
     def:{description:'Zeigt das Agenten-Büro: alle Helfer von JARVIS live an ihren Schreibtischen (Gehirn, Wächter, Routinen, Missionen, Telefon, Briefing, Stimme, Server) mit Status, Aufgabe und nächstem Termin. Aktualisiert sich selbst.', input_schema:S({fokus:{type:'string', description:'Name eines Agenten, der hervorgehoben werden soll (optional)'}})},
@@ -2233,6 +2242,7 @@ Handle selbstständig mit deinen Werkzeugen statt nur zu erklären:
 - „Ruf mich an / weck mich mit Anruf“ → set_timer mit art "anruf".
 - „Jeden Morgen / jeden Freitag um … mach …“ → routinen (anlegen). „Sag mir, wenn …“ → watchers.
 - „Zeig mir meine Agenten / wer arbeitet gerade / Büro“ → agenten_buero.
+- „Handsteuerung an / ich will das Modell mit der Hand drehen“ → handsteuerung (an). Die Kamera läuft nie dauernd.
 - Nachrichten schreiben → Text fertig formulieren und open_app (whatsapp/sms/email). Senden tippt der Nutzer selbst (Android-Sicherheit).
 - „Bau/Mach mir eine App / ein Spiel / ein Tool“ → create_app. Schreibe ein vollständiges, poliertes, einzelnes HTML-Dokument: mobile-first (viewport meta), Touch-Steuerung, modernes dunkles Design mit Farbverläufen und Animationen, keine Platzhalter. Externe Bibliotheken nur von cdnjs.cloudflare.com oder cdn.jsdelivr.net. localStorage ist in Apps NICHT verfügbar (in try/catch kapseln). Sag danach in einem Satz, was die App kann. Um eine App zu verbessern: my_apps quelltext holen, dann create_app mit gleichem Namen.
 Wenn etwas technisch auf dem Handy nicht geht (z.B. WLAN schalten, fremde Apps fernsteuern), sag es ehrlich in einem Satz und biete die beste Alternative an.
@@ -2550,7 +2560,7 @@ function readSettings(){
     ntfy:$('#cfgNtfy').value.trim(), tg:$('#cfgTg').value.trim(), allowCall:$('#cfgCall').checked, rules:$('#cfgRules').value.trim()});
   const wasHand = cfg.handCtl;
   document.querySelectorAll('#settings [data-k]').forEach(el => { cfg[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value.trim(); });   // 5.2 fields
-  store.set('cfg', cfg); applyTheme(); if (wasHand !== cfg.handCtl) toggleHands(cfg.handCtl);
+  store.set('cfg', cfg); applyTheme(); if (wasHand && !cfg.handCtl){ handManualUntil = 0; stopHands(); }   // 5.9: switching on only allows it – the camera starts when a 3D model is open
 }
 function renderLists(){
   const mk = (arr, el, txt, del) => { el.innerHTML = arr.length ? '' : '<p class="hint">Leer.</p>';
@@ -2859,9 +2869,25 @@ setTimeout(kBuild, 2500);
 /* ---------- hand control ---------- */
 let handCam = null, handFeed = null;
 function handTarget(){ const L = wm.list().filter(w => w.typ === 'scene' || w.typ === 'model3d'); return (L.find(w => w.fokus) || L.at(-1))?.id; }
+// 5.9: the camera only runs while it is needed – a 3D model/scene is open (hand control allowed) or you/JARVIS switched it on.
+// It goes off again when the 3D window closes or after 60 s without a hand in front of it.
+let handStarting = false, handManualUntil = 0, lastHandSeen = 0, handSnooze = '';
+const view3D = () => wm.list().filter(w => w.typ === 'scene' || w.typ === 'model3d').map(w => w.id).join(',');
+function stopHands(){ const cur = $('#handCursor'), badge = $('#handBadge'); handCam?.stop(); handCam = null; cur.style.display = 'none'; badge.style.display = 'none'; badge.querySelector('video')?.remove(); }
+setInterval(() => {
+  const now = Date.now(), ids = wmReal ? view3D() : '';
+  if (!ids) handSnooze = '';
+  const want = now < handManualUntil || (cfg.handCtl && ids && ids !== handSnooze);
+  if (want && !handCam && !handStarting) toggleHands(true);
+  else if (handCam && (!want || now - lastHandSeen > 60e3)){
+    if (now - lastHandSeen > 60e3){ handSnooze = ids; handManualUntil = 0; toast('📷 Kamera aus – keine Hand gesehen. Für Handsteuerung sag „Handsteuerung an“.'); }
+    stopHands();
+  }
+}, 2000);
 async function toggleHands(on){
   const cur = $('#handCursor'), badge = $('#handBadge');
-  if (!on){ handCam?.stop(); handCam = null; cur.style.display = 'none'; badge.style.display = 'none'; return; }
+  if (!on){ stopHands(); return; }
+  if (handCam || handStarting) return; handStarting = true;
   try{
     const H = await import('./js/hands.js');
     handFeed = H.createGestures({
@@ -2871,11 +2897,11 @@ async function toggleHands(on){
       explode(on){ const id = handTarget(); if (!id) return; buzz(20); wm.act(id, 'explode', {an:on}).catch(() => {}); toast(on ? '✋ Zerlegt' : '✊ Zusammengesetzt'); },
     });
     badge.querySelector('div').textContent = '✋ LÄDT …'; badge.style.display = 'block';
-    handCam = await H.startCamera(p => handFeed(p));
+    handCam = await H.startCamera(p => { if (p.hands.length) lastHandSeen = Date.now(); handFeed(p); }); lastHandSeen = Date.now();
     badge.prepend(handCam.video); badge.querySelector('div').textContent = '✋ BEREIT';
-  }catch(e){ badge.style.display = 'none'; cfg.handCtl = false; store.set('cfg', cfg); toast('Handsteuerung: ' + (e.message || e)); }
+  }catch(e){ badge.style.display = 'none'; handManualUntil = 0; handSnooze = view3D(); toast('Handsteuerung: ' + (e.message || e)); }
+  finally{ handStarting = false; }
 }
-if (cfg.handCtl) setTimeout(() => toggleHands(true), 3000);
 
 /* =========================================================
    5.4 FREIHEIT & MITDENKEN – one central place decides when JARVIS asks

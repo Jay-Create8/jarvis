@@ -49,3 +49,18 @@ das nicht ab. Preise laut Twilio (Aug./Okt. 2026), bitte vor dem Kauf selbst pr�
 Echte KI-Antworten (wie gut Flash-Lite im Alltag und Sonnet bei grossen Aufgaben sind), echte Telefonate (Twilio, Sprach-
 erkennung Schweizerdeutsch), dein echtes Gemini-Gratiskontingent (Server und App teilen sich den Key), Einrichtungs-Assistent mit
 echtem Cloudflare-Konto, echtes Android-Gerät. Smartwatch-Werte im Briefing sind nicht gebaut (bräuchten eigenen Android-Code).
+
+## 5.9.1 – Kamera nur bei Bedarf
+Vorher lief die Kamera bei eingeschalteter Handsteuerung **dauernd** (mit kleinem Vorschaubild). Jetzt:
+| Situation | Kamera |
+|---|---|
+| Kein 3D-Modell offen | **aus** |
+| 3D-Modell/-Szene offen und Handsteuerung erlaubt | an |
+| 1 Minute keine Hand vor der Kamera | **aus** (startet beim selben Modell nicht gleich wieder) |
+| „Handsteuerung an“ / „aus“ (JARVIS-Werkzeug `handsteuerung`) | an (max. 10 Min.) / sofort aus |
+| „Was siehst du?“ (Foto) | nur für ca. 1 Sekunde, wie bisher |
+
+| Test | Ergebnis |
+|---|---|
+| Neuer Test K1 (Leerlauf aus → 3D an → nach 67 s ohne Hand aus → bleibt aus → an/aus auf Zuruf) | ✅ |
+| Handsteuerung mit echtem Handvideo, 3D-Modell, Kamera-Befehle | ✅ 3/3 |

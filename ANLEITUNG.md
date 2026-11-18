@@ -1,4 +1,6 @@
-# J.A.R.V.I.S. 5.9 🤖
+# J.A.R.V.I.S. 5.9.1 🤖
+
+> **5.9.1:** Die Kamera läuft nicht mehr dauernd. Sie geht nur an, wenn ein 3D-Modell offen ist (und Handsteuerung erlaubt ist) oder du „Handsteuerung an“ sagst – nach 1 Minute ohne Hand wieder aus. Fotos („Was siehst du?“) öffnen sie nur kurz.
 
 > **Neu in 5.9: alles zusammen für max. 5 Fr. im Monat.**
 > 1. **🧠 Profi-Modus:** Alltägliches denkt Gemini gratis. Grosse Aufgaben (App/Spiel/3D bauen, Analysen, Vergleiche, lange Texte)
