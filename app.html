@@ -482,7 +482,7 @@ body.immersive #chatToggle{display:grid}
 <script type="module">
 import * as G from './js/gemini.js';   // 5.8: free brain (Google Gemini)
 import * as L from './loader.js';       // 5.8: resumable part-wise loader
-const APP_VER = '5.9.7.4';   // written by tools/build-parts.mjs
+const APP_VER = '5.9.7.5';   // written by tools/build-parts.mjs
 // 5.9.5.2: no silent failures – every unexpected error is shown (max. one notice per 20 s) and kept for the diagnosis
 const errLog = [];
 function noteError(where, e, show = true){
@@ -3610,6 +3610,11 @@ setState('idle');
 // first tap anywhere unlocks audio + speaks greeting once
 document.addEventListener('pointerdown', function once(){ document.removeEventListener('pointerdown', once); if (hasKey() && cfg.speak && !busy && !ttsQueue && !rec) { /* quiet unlock */ beep(1,.001); } }, {once:true});
 let setupPending = false;
+// 5.9.7.5: several JARVIS tabs – a tab with old settings must never overwrite what another tab just saved (e.g. the setup link)
+window.addEventListener('storage', (e) => {
+  if (e.key !== 'jarvis.cfg' || !e.newValue) return;
+  try{ const n = JSON.parse(e.newValue); Object.assign(cfg, n); if ($('#settings').classList.contains('open')){ fillSettings(); fillProfil(); fillClaudeBox(); } if (cfg.srv && cfg.srvTok) hubConnect(); }catch{}
+});
 // 5.4: setup link from the setup assistant (QR code) – #einrichten=<base64url JSON>. Never contains the Anthropic key.
 async function importSetupLink(){
   // 5.9.7.4: keep the link until it is handled – an update reload in between must not lose it
