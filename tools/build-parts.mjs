@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PART = 16384, VER = '5.9.7.3';
+const PART = 16384, VER = '5.9.7.4';
 const GROUPS = {
   req: ['index.html', 'app.html', 'loader.js', 'js/gemini.js', 'manifest.json', 'icon.svg'],          // needed to start
   def: ['js/hud3d.js', 'js/chunk-OF6KIFO7.js', 'js/windows.js', 'vendor/leaflet.css', 'icon-192.png'],  // loaded right after the start

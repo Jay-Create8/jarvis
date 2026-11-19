@@ -482,7 +482,7 @@ body.immersive #chatToggle{display:grid}
 <script type="module">
 import * as G from './js/gemini.js';   // 5.8: free brain (Google Gemini)
 import * as L from './loader.js';       // 5.8: resumable part-wise loader
-const APP_VER = '5.9.7.3';   // written by tools/build-parts.mjs
+const APP_VER = '5.9.7.4';   // written by tools/build-parts.mjs
 // 5.9.5.2: no silent failures – every unexpected error is shown (max. one notice per 20 s) and kept for the diagnosis
 const errLog = [];
 function noteError(where, e, show = true){
@@ -3582,7 +3582,7 @@ async function checkUpdate(){
     const r = await L.ensure(['req', 'def'], {man});
     await L.markComplete(man);
     // 5.9.5.2: apply at once – before, the new version only came with the start after next (when you opened app.html directly)
-    const fresh = !lastUserText && !busy && !ttsQueue && store.get('autoReload', '') !== man.v;   // never a reload loop
+    const fresh = !lastUserText && !busy && !ttsQueue && store.get('autoReload', '') !== man.v && !document.querySelector('.sheet.open') && !setupPending;   // never a reload loop, never during a dialog or a setup link
     if (fresh){ store.set('autoReload', man.v); sysLine(`⬆️ JARVIS ${esc(man.ver || '')} ist da – ich starte kurz neu …`); setTimeout(() => location.reload(), 1500); return; }
     const b = document.createElement('div'); b.className = 'sys'; b.innerHTML = `⬆️ JARVIS ${esc(man.ver || '')} ist geladen${r.total ? ' (' + Math.round((r.total - r.reused) / 1024) + ' KB neu)' : ''}. <button class="btn primary" style="padding:4px 10px">JETZT NEU LADEN</button>`;
     b.querySelector('button').onclick = () => location.reload(); logEl.append(b); scrollDown();
@@ -3609,15 +3609,20 @@ const hello = greet();
 setState('idle');
 // first tap anywhere unlocks audio + speaks greeting once
 document.addEventListener('pointerdown', function once(){ document.removeEventListener('pointerdown', once); if (hasKey() && cfg.speak && !busy && !ttsQueue && !rec) { /* quiet unlock */ beep(1,.001); } }, {once:true});
+let setupPending = false;
 // 5.4: setup link from the setup assistant (QR code) – #einrichten=<base64url JSON>. Never contains the Anthropic key.
 async function importSetupLink(){
-  const m = location.hash.match(/^#einrichten=([A-Za-z0-9_-]+)$/); if (!m) return false;
+  // 5.9.7.4: keep the link until it is handled – an update reload in between must not lose it
+  let hash = location.hash; if (!/^#einrichten=/.test(hash)){ try{ hash = sessionStorage.getItem('jarvis.setupLink') || ''; }catch{} }
+  const m = hash.match(/^#einrichten=([A-Za-z0-9_-]+)$/); if (!m) return false;
+  setupPending = true; try{ sessionStorage.setItem('jarvis.setupLink', hash); }catch{}
   window.history.replaceState(null, '', location.pathname + location.search);   // (app variable 'history' is the chat) token never stays in the address bar / history
-  let d; try{ d = JSON.parse(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))); }catch{ toast('Einrichtungs-Link ist beschädigt.'); return true; }
+  let d; try{ d = JSON.parse(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))); }catch{ setupPending = false; try{ sessionStorage.removeItem('jarvis.setupLink'); }catch{} toast('Einrichtungs-Link ist beschädigt.'); return true; }
   const okUrl = typeof d.srv === 'string' && /^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(d.srv.replace(/\/$/, ''));
   const okTok = typeof d.srvTok === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(d.srvTok);
-  if (!okUrl || !okTok || (d.ntfy && !/^[a-z0-9_-]{6,64}$/.test(d.ntfy))){ toast('Einrichtungs-Link ungültig – nichts übernommen.'); return true; }
+  if (!okUrl || !okTok || (d.ntfy && !/^[a-z0-9_-]{6,64}$/.test(d.ntfy))){ setupPending = false; try{ sessionStorage.removeItem('jarvis.setupLink'); }catch{} toast('Einrichtungs-Link ungültig – nichts übernommen.'); return true; }
   const yes = await requireApproval({art:'Einrichtung übernehmen', was:`JARVIS-Server ${d.srv}${d.ntfy ? ' · Push-Thema ' + d.ntfy : ''}${d.agentRemote ? ' · PC-Agent über den Server' : ''}`, wo:'Nur übernehmen, wenn der Link aus DEINEM Einrichtungs-Assistenten stammt.', key:'setup:' + d.srv});
+  setupPending = false; try{ sessionStorage.removeItem('jarvis.setupLink'); }catch{}
   if (!yes) return true;
   if (typeof d.agentSrvTok === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(d.agentSrvTok)) cfg.agentSrvTok = d.agentSrvTok;   // 5.9.7
   if (typeof d.mcpUrl === 'string' && /^https:\/\/[a-z0-9.-]+\/mcp\/[A-Za-z0-9_-]{16,128}$/i.test(d.mcpUrl)) cfg.mcpUrl = d.mcpUrl;
