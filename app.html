@@ -2228,7 +2228,8 @@ const gemRaw = new WeakMap(), gemIds = {};
 const slowNet = () => { const k = L.speed(), c = navigator.connection || {}; return (k > 0 && k < 4) || /2g/.test(c.effectiveType || '') || !!c.saveData; };
 function gemRetryNote(r){
   sysLine(r.grund === 'minutenlimit' ? `⏳ Google-Gratislimit pro Minute erreicht – ich warte ${r.sekunden} s und mache dann automatisch weiter.`
-    : r.grund === 'verbindung' ? `📶 Verbindung zu Google unterbrochen – neuer Versuch ${r.versuch}/${r.von} in ${r.sekunden} s.` : `⏳ Google ist kurz überlastet – neuer Versuch in ${r.sekunden} s.`);
+    : r.grund === 'verbindung' ? `📶 Verbindung zu Google unterbrochen – neuer Versuch ${r.versuch}/${r.von} in ${r.sekunden} s.`
+    : r.grund === 'zeitüberschreitung' ? `⏳ Google antwortet nicht – ich frage nochmal (Versuch ${r.versuch}/${r.von}).` : `⏳ Google ist kurz überlastet – neuer Versuch in ${r.sekunden} s.`);
 }
 function gemErrorText(e){
   if (e.status >= 500 || /overloaded|high demand|UNAVAILABLE/i.test(e.message || '')) return 'Google ist gerade überlastet (die Gratis-Version kommt bei viel Betrieb zuletzt dran). Ich habe es mehrmals und mit beiden Gemini-Modellen versucht. Schick die Nachricht in einer Minute nochmal' + (hasClaude() ? ' – oder stell in den Einstellungen „Immer Claude“ ein, das ist zuverlässiger.' : ' – zuverlässiger wird es mit einem Claude-Key (Kostendeckel 5 Fr.).');
@@ -2450,10 +2451,18 @@ function toolDefs(model = effModel()){
   return defs;
 }
 
+let turnAbort = null, turnActivity = 0, turnTools = 0;
+try{ const t = +localStorage.getItem('jarvis.testTimeout'); if (t > 0){ G.TIMEOUT.header = t; G.TIMEOUT.stall = t; } }catch{}   // tests only: shorter timeouts
 async function handleInput(text, imageDataUrl, opts = {}){
   text = (text||'').trim();
   if (!text && !imageDataUrl) return;
-  if (busy) return;
+  if (busy){
+    if (opts.silent){ eventQueue.push(text); return; }   // background events wait their turn
+    // 5.9.5.1: the user asks again → stop the old request (it may hang) and answer the new question
+    sysLine('⏹ Letzte Anfrage abgebrochen – ich nehme deine neue Frage.'); turnAbort?.abort();
+    for (let i = 0; i < 50 && busy; i++) await new Promise(r => setTimeout(r, 100));
+    if (busy){ busy = false; setState('idle'); }
+  }
   const prov = provider();
   if (!prov){ toast('Bitte zuerst einen KI-Key eintragen – ein Gemini-Key von Google ist gratis (Einstellungen → Schnellstart).'); openSettings(); return; }
   if (prov === 'gemini'){
@@ -2503,6 +2512,7 @@ async function runAgent(){
   let model = isG ? gemModel() : (turnModel || effModel()); turnModel = null; const turnStart = history.length;
   lastModelUsed = model; syncConversationPrompt();
   busy = true; setState('think'); chirpOn(); hud.pulse(.8);
+  turnAbort = new AbortController(); turnActivity = Date.now(); const turnSignal = turnAbort.signal;
   if (slowNet()) L.hold(true);   // 5.8: on a very slow line the background download pauses while JARVIS talks to the AI
   let c = isG ? null : getClient(), malformedRetry = false;
   const wantProfi = turnProfi; turnProfi = false; escalateReq = null;
@@ -2545,6 +2555,7 @@ async function runAgent(){
           const ch = chips[ev.index]; ch.dataset.len = +ch.dataset.len + ev.delta.partial_json.length;
           ch.textContent = 'APP-FABRIK · ' + (ch.dataset.len/1024).toFixed(1) + ' KB'; hud.pulse(.15);
         }
+        turnActivity = Date.now();
         if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta'){
           textSoFar += ev.delta.text; textEl.innerHTML = md(stripUi(textSoFar)); if (document.body.classList.contains('immersive')){ const plain = cleanForSpeech(textSoFar); $('#subtitle').textContent = plain.length > 150 ? '…' + plain.slice(-150) : plain; } speaker.push(ev.delta.text); scrollDown();
           if (state === 'think' && !ttsQueue) setState(cfg.speak ? 'think' : 'speak');
@@ -2559,13 +2570,16 @@ async function runAgent(){
       for (let att = 0; !msg; att++){
         try{
           if (isG){
-            const s = G.gemStream({key:gemKey(), model, system:convSystem, history, tools:toolDefs(model), maxTokens:8192, raw:gemRaw, ids:gemIds, stream:!slowNet(), onRetry:gemRetryNote});
+            const s = G.gemStream({key:gemKey(), model, system:convSystem, history, tools:toolDefs(model), maxTokens:8192, raw:gemRaw, ids:gemIds, stream:!slowNet(), onRetry:(r) => { turnActivity = Date.now(); gemRetryNote(r); }, signal:turnSignal});
             s.on('streamEvent', onEv); msg = await s.finalMessage(); gemCount(model);
           } else {
-            const s = c.beta.messages.stream(claudeParams()); s.on('streamEvent', onEv); msg = await s.finalMessage(); trackUsage(msg.model || model, msg.usage);
+            const s = c.beta.messages.stream(claudeParams(), {signal:turnSignal, timeout:90000}); s.on('streamEvent', onEv); msg = await s.finalMessage(); trackUsage(msg.model || model, msg.usage);
           }
         }catch(e){
-          const busyG = isG && !e.perDay && (e.status >= 500 || /overloaded|high demand|UNAVAILABLE/i.test(e.message || ''));   // 5.9.3: Google overloaded (free users come last)
+          if (turnSignal.aborted) throw Object.assign(new Error('abgebrochen'), {aborted:true});
+          // 5.9.5.1: Google refused one of the tool descriptions → answer with the core tools instead of not at all
+          if (isG && e.status === 400 && /function_declarations|function declaration|parameters|schema|tools\[/i.test(e.message || '') && !convLite){ convLite = true; sysLine('🛠️ Google hat eines meiner Werkzeuge abgelehnt – ich antworte mit den Grundwerkzeugen.'); att--; continue; }
+          const busyG = isG && !e.perDay && (e.status >= 500 || e.network || /overloaded|high demand|UNAVAILABLE/i.test(e.message || ''));   // 5.9.5.1: also no answer / hanging line   // 5.9.3: Google overloaded (free users come last)
           if (isG && (e.perDay || busyG) && att < 3){   // quota used up or overloaded → other Gemini model (own quota, often less busy), then Claude only if you allowed it
             if (e.perDay) gemExhausted(model); triedG.add(model);
             const i = gemInfo || {}, alt = [i.lite, i.flash, GEM_DEFAULT].find(m => m && !triedG.has(m) && !gemUseToday().aus.includes(m));
@@ -2622,10 +2636,12 @@ async function runAgent(){
         }
       };
       // UI calls run in order (open → command), everything else in parallel
+      turnTools++; turnActivity = Date.now();
       const others = uses.filter(u => u.name !== 'ui').map(u => [u.id, exec(u)]);
       const uiRes = {}; for (const u of uses.filter(u => u.name === 'ui')) uiRes[u.id] = await exec(u);
       const otherRes = Object.fromEntries(await Promise.all(others.map(async ([id, p]) => [id, await p])));
       const results = uses.map(u => uiRes[u.id] || otherRes[u.id]);
+      turnTools = Math.max(0, turnTools - 1); turnActivity = Date.now();
       opsSync();
       renderPending(body);
       history.push({role:'user', content: results});
@@ -2637,6 +2653,7 @@ async function runAgent(){
     setTimeout(() => wm.orbIdle(), 2500);
     if (!textSoFar.trim() && !body.querySelector('.actbtn')) textEl.innerHTML = md('Erledigt.');
   }catch(e){
+    if (e?.aborted || turnAbort?.signal.aborted){ body.insertAdjacentHTML('beforeend', '<p class="hint">(abgebrochen)</p>'); while (history.length && history[history.length-1].role === 'user') history.pop(); return; }
     console.error(e);
     setState('error');
     let m = e?.message || String(e);
@@ -2651,11 +2668,15 @@ async function runAgent(){
     while (history.length && history[history.length-1].role === 'user') history.pop();
     beep(220,.25,'sawtooth',.06);
   } finally {
-    busy = false; renderPending(body); L.hold(false);
+    busy = false; turnAbort = null; turnTools = 0; renderPending(body); L.hold(false);
     if (!ttsQueue) afterIdle();
     if (eventQueue.length) setTimeout(() => handleInput(eventQueue.shift(), null, {silent:true}), 50);
   }
 }
+setInterval(() => {
+  if (!busy || !turnAbort) return;
+  if (Date.now() - turnActivity > (turnTools > 0 ? 600e3 : 180e3)){ sysLine('⏹ Keine Antwort mehr bekommen – ich habe abgebrochen. Frag einfach nochmal.'); turnAbort.abort(); }
+}, 5000);
 /* live research window, fed by the REAL web_search results (urls/titles), errors included */
 function liveResearch(srv, content){
   let q = ''; try{ q = JSON.parse(srv?.json || '{}').query || ''; }catch{}

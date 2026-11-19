@@ -92,20 +92,31 @@ export function parseError(status, j){
   const perDay = /PerDay|per_day|daily/i.test(quota) || (/RESOURCE_EXHAUSTED/.test(e.status || '') && !retry && !/PerMinute/i.test(quota));
   return new GeminiError(e.message || ('HTTP ' + status), {status, reason, retryAfter: retry ? parseFloat(retry) : 0, perDay: status === 429 && perDay, quota, gemini:true});
 }
-export async function gemFetch(path, body, {key, signal, onRetry, stream = false, tries = 4} = {}){
+// 5.9.5.1: a request may never hang – no answer header within `timeoutMs` → cancelled and retried (it used to wait forever,
+// and JARVIS then ignored every following question)
+export const TIMEOUT = {header:30000, stall:45000};
+function linked(signal, ms){
+  const ac = new AbortController(); let timedOut = false;
+  const t = ms ? setTimeout(() => { timedOut = true; ac.abort(); }, ms) : null;
+  const onAbort = () => ac.abort(); if (signal){ if (signal.aborted) ac.abort(); else signal.addEventListener('abort', onAbort, {once:true}); }
+  return {signal:ac.signal, done(){ clearTimeout(t); }, get timedOut(){ return timedOut; }, abort(){ ac.abort(); }};
+}
+export async function gemFetch(path, body, {key, signal, onRetry, stream = false, tries = 4, timeoutMs = TIMEOUT.header} = {}){
   const json = JSON.stringify(body), packed = await gz(json);
   const headers = {'Content-Type':'application/json', 'x-goog-api-key':key};
   if (packed) headers['Content-Encoding'] = 'gzip';
   for (let i = 1; ; i++){
-    let r;
-    try{ r = await fetch(BASE + path, {method:'POST', headers, body: packed || json, signal}); }
+    let r; const L = linked(signal, timeoutMs);
+    try{ r = await fetch(BASE + path, {method:'POST', headers, body: packed || json, signal:L.signal}); L.done(); }
     catch(e){
-      if (signal?.aborted || i >= tries) throw new GeminiError('Keine Verbindung zu Google (' + (e.message || e) + ')', {status:0, network:true});
-      const wait = Math.min(20, 2 ** i);
-      onRetry?.({grund:'verbindung', versuch:i + 1, von:tries, sekunden:wait});
+      L.done();
+      if (signal?.aborted) throw Object.assign(new GeminiError('abgebrochen', {status:0}), {aborted:true});
+      if (i >= tries) throw new GeminiError(L.timedOut ? 'Google antwortet nicht (Zeitüberschreitung)' : 'Keine Verbindung zu Google (' + (e.message || e) + ')', {status:0, network:true});
+      const wait = L.timedOut ? 1 : Math.min(20, 2 ** i);
+      onRetry?.({grund:L.timedOut ? 'zeitüberschreitung' : 'verbindung', versuch:i + 1, von:tries, sekunden:wait});
       await waitOnline(wait * 1000, signal); continue;
     }
-    if (r.ok) return {res:r, bytesUp:(packed ? packed.byteLength : json.length), bytesRaw:json.length};
+    if (r.ok) return {res:r, bytesUp:(packed ? packed.byteLength : json.length), bytesRaw:json.length, cancel:L.abort};
     let j = null; try{ j = await r.json(); }catch{}
     const err = parseError(r.status, j);
     if (r.status === 429 && !err.perDay && err.retryAfter <= 65 && i < tries){ const s = Math.ceil(err.retryAfter || 20); onRetry?.({grund:'minutenlimit', versuch:i + 1, von:tries, sekunden:s}); await sleep(s * 1000, signal); continue; }
@@ -153,10 +164,13 @@ export class Assembler {
       usage:{input_tokens:u.promptTokenCount || 0, output_tokens:(u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0), cache_read_input_tokens:u.cachedContentTokenCount || 0}};
   }
 }
-async function* sse(res){
+async function* sse(res, stallMs = TIMEOUT.stall){
   const rd = res.body.getReader(), dec = new TextDecoder(); let buf = '';
   for (;;){
-    const {value, done} = await rd.read(); if (done) break;
+    // 5.9.5.1: no new data for `stallMs` → the stream is dead; stop instead of waiting forever
+    let t; const stall = new Promise((_, rej) => { t = setTimeout(() => { try{ rd.cancel(); }catch{} rej(new GeminiError('Google antwortet nicht mehr (Verbindung hängt)', {status:0, network:true})); }, stallMs); });
+    let part; try{ part = await Promise.race([rd.read(), stall]); } finally { clearTimeout(t); }
+    const {value, done} = part; if (done) break;
     buf += dec.decode(value, {stream:true});
     let i; while ((i = buf.indexOf('\n')) >= 0){ const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (line.startsWith('data:')){ const d = line.slice(5).trim(); if (d && d !== '[DONE]') yield JSON.parse(d); } }
   }
@@ -173,7 +187,7 @@ export function gemStream({key, model, system, history, tools, maxTokens = 8192,
   const run = (async () => {
     await null;   // let the caller attach handlers first
     const path = `/models/${model}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
-    const {res, bytesUp, bytesRaw} = await gemFetch(path, body, {key, signal, onRetry, tries});
+    const {res, bytesUp, bytesRaw} = await gemFetch(path, body, {key, signal, onRetry, tries, timeoutMs: stream ? TIMEOUT.header : TIMEOUT.header * 3});
     const asm = new Assembler(ids, emit);
     if (stream){ for await (const c of sse(res)) asm.push(c); } else asm.push(await res.json());
     const msg = asm.result();
@@ -188,7 +202,7 @@ export async function gemOnce({key, model, system, prompt, parts, search = false
   if (system) body.systemInstruction = {parts:[{text:system}]};
   const tl = []; if (search) tl.push({google_search:{}}); if (urls) tl.push({url_context:{}}); if (tl.length) body.tools = tl;
   if (schema){ body.generationConfig.responseMimeType = 'application/json'; body.generationConfig.responseJsonSchema = cleanSchema(schema); }
-  const {res} = await gemFetch(`/models/${model}:generateContent`, body, {key, signal, onRetry, tries});
+  const {res} = await gemFetch(`/models/${model}:generateContent`, body, {key, signal, onRetry, tries, timeoutMs:60000});   // whole answer at once (search can take a while)
   const j = await res.json(); const cand = j.candidates?.[0];
   const text = (cand?.content?.parts || []).filter(p => !p.thought && p.text).map(p => p.text).join('');
   const gm = cand?.groundingMetadata || {};
@@ -199,7 +213,10 @@ export async function gemOnce({key, model, system, prompt, parts, search = false
 
 // ---------- pick the models this key can use (newest stable Flash-Lite + Flash) ----------
 export async function gemModels(key, signal){
-  const r = await fetch(BASE + '/models?pageSize=200', {headers:{'x-goog-api-key':key}, signal});
+  const L = linked(signal, 15000); let r;
+  try{ r = await fetch(BASE + '/models?pageSize=200', {headers:{'x-goog-api-key':key}, signal:L.signal}); }
+  catch(e){ throw new GeminiError(L.timedOut ? 'Google antwortet nicht (Zeitüberschreitung)' : 'Keine Verbindung zu Google', {status:0, network:true}); }
+  finally { L.done(); }
   let j = null; try{ j = await r.json(); }catch{}
   if (!r.ok) throw parseError(r.status, j);
   const ok = (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name.replace(/^models\//, ''));

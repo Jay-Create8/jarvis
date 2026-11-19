@@ -204,3 +204,21 @@ C1 App + echter Agent (Festplatte-voll-Meldung, Duplikate mit Freigabe, Systemzu
 **Ehrlich:** Die Windows-Befehle (PowerShell, explorer.exe, Medientasten, Bildschirmfoto, Autostart) sind hier nur als Befehl geprüft –
 ausgeführt auf echtem Windows ⚪ ungetestet (kein Windows hier; das Installieren von PowerShell zum Prüfen wurde in dieser Umgebung
 nicht erlaubt). Die YouTube-Videos selbst konnte ich nicht abrufen (YouTube blockt den Server) – dein Bildschirmvideo schon.
+
+## 5.9.5.1 – „Er antwortet auf keine Frage“
+**Ursache (gefunden):** Hing eine Anfrage an Google (keine Antwort, z.B. kurzer Netz-Aussetzer oder überlastete Leitung), wartete
+JARVIS **ohne Zeitlimit** – und weil er „beschäftigt“ war, ignorierte er danach **jede weitere Frage stillschweigend**. Im Test exakt
+nachgestellt: leere Antwortblase, nichts passiert mehr.
+**Behebung:**
+| Was | Wie |
+|---|---|
+| Zeitlimit | Keine Antwort von Google in 30 s → Anfrage abgebrochen und neu gestellt („Google antwortet nicht – ich frage nochmal“); Stream ohne neue Daten 45 s → ebenso; danach anderes Gemini-Modell; Modell-Liste 15 s, Claude 90 s |
+| Neue Frage | bricht die hängende alte ab („⏹ Letzte Anfrage abgebrochen – ich nehme deine neue Frage“) statt ignoriert zu werden |
+| Wächter | passiert 3 Minuten gar nichts (bei laufenden Werkzeugen 10 Min.), bricht JARVIS selbst ab und sagt es |
+| Werkzeug abgelehnt | lehnt Google eine Werkzeug-Beschreibung ab (400), antwortet JARVIS mit den Grundwerkzeugen statt gar nicht |
+| Beim Bauen gefunden | eigener Fehler in der ersten Fassung (Variable doppelt benannt → JARVIS wäre wieder hängen geblieben) – vom neuen Test sofort erkannt und behoben |
+
+**Tests:** H1 (Google hängt → neuer Versuch → Antwort) ✅ · H2 (neue Frage bricht hängende ab, danach antwortet er weiter) ✅ ·
+O1, A2, P1, P3, S2, D1, C1, V6 ✅ · Gemini-Übersetzer 9/9 · Live-Seite mit Gemini und Claude (nachgestellt) antwortet ✅.
+**Ehrlich:** Ob genau das bei dir passiert ist, weiss ich nicht sicher – es ist die einzige Ursache, die ich nachstellen konnte. Wenn er
+immer noch nicht antwortet: bitte Screenshot (mit der Meldung im Chat).
