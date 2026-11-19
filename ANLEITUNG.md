@@ -1,4 +1,8 @@
-# J.A.R.V.I.S. 5.9.6 🤖
+# J.A.R.V.I.S. 5.9.7 🤖
+
+> **5.9.7: Mit Claude verbinden.** Claude (dein Pro-Abo) denkt, JARVIS führt aus und zeigt alles auf dem Laptop – Hologramm-Fenster,
+> fliegende Dateien, Stimme. Einmal: Einrichtung (gratis Cloudflare-Server) → in Claude Einstellungen → Konnektoren →
+> „Benutzerdefinierten Konnektor hinzufügen“ → Adresse aus JARVIS → Einstellungen → MIT CLAUDE VERBINDEN einfügen.
 
 > **5.9.6: JARVIS in der Claude-App – mit deinem Claude Pro, ohne API-Key.** Einstellungen → „📥 JARVIS-Erweiterung herunterladen“
 > → Doppelklick → in Claude „Installieren“. Dann kann Claude deine Dateien aufräumen, Programme öffnen, Lautstärke/Musik steuern,

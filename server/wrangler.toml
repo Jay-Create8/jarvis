@@ -11,3 +11,12 @@ crons = ["*/15 * * * *"]           # Wächter alle 15 Minuten – auch bei gesch
 
 [vars]
 PUBLIC_URL = ""                    # z.B. https://jarvis-server.DEINNAME.workers.dev
+
+# 5.9.7: live hub for the Claude connection (Durable Object, free plan with SQLite storage)
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "Hub"
+
+[[migrations]]
+tag = "v1-hub"
+new_sqlite_classes = ["Hub"]

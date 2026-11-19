@@ -215,5 +215,21 @@ export async function autostart({ an = true } = {}) {
 }
 export const autostartStatus = () => existsSync(startupFile());
 
+/* ---------- 5.9.6/5.9.7: human confirmation – a real dialog on the user's screen (the AI cannot click it) ---------- */
+export function askHuman(message) {
+  const t = process.env.JARVIS_TEST_CONFIRM; if (t) return Promise.resolve(/^(ja|yes|1)$/i.test(t));   // tests only
+  const p = process.env.JARVIS_PLATFORM || process.platform;
+  const [cmd, args] = p === 'win32'
+    ? ['powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', "Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.Form -Property @{TopMost=$true}; $r = [System.Windows.Forms.MessageBox]::Show($f, $env:JV_MSG, 'JARVIS - Bestaetigung', 'YesNo', 'Warning', 'Button2'); $f.Dispose(); if ($r -eq 'Yes') { 'JA' } else { 'NEIN' }"]]
+    : p === 'darwin' ? ['osascript', ['-e', 'display dialog (system attribute "JV_MSG") with title "JARVIS – Bestätigung" buttons {"Nein", "Ja"} default button "Nein" with icon caution', '-e', 'if button returned of result is "Ja" then return "JA"']]
+    : ['zenity', ['--question', '--title=JARVIS – Bestätigung', '--text', message]];
+  return new Promise((res) => {
+    let out = ''; const ch = spawn(cmd, args, { env: { ...process.env, JV_MSG: message }, windowsHide: false });
+    ch.stdout.on('data', (d) => { out += d; }); ch.on('error', () => res(false));
+    ch.on('close', (code) => res(p === 'linux' ? code === 0 : /JA/.test(out)));
+  });
+}
+
+
 export const needsConfirmPc = (name, args) => name === 'herunterfahren' && args?.art !== 'abbrechen';
 export const PC_ACTIONS = { apps, app_öffnen, fenster, fenster_schliessen, lautstärke, medien, bildschirm, system, schreiben, zwischenablage, sperren, herunterfahren, app_fenster, autostart, autostart_status: async () => ({ autostart: autostartStatus() ? 'an' : 'aus', system: WIN ? 'Windows' : MAC ? 'Mac' : 'Linux' }) };

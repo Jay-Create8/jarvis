@@ -246,3 +246,30 @@ Die Claude-App bekommt JARVIS' Hände als Erweiterung („MCP Bundle“, ein Dop
 | Offizieller MCP-Client | so gestartet wie die Claude-App es tut (entpackt, `node ${__dirname}/server/mcp.mjs`): Verbindung, Werkzeugliste, echtes Sortieren + Rückgängig, Suchen, Lesen, Grenzen, Systemzustand, Duplikate | **9/9** ✅ |
 | Claude-Projekt „JARVIS“ | `JARVIS-Anweisungen.txt` zum Einfügen (Persönlichkeit, Arbeitsweise) | – |
 **Ungetestet (⚪):** die Installation in deiner echten Claude-App und die Windows-Fenster selbst (kein Windows hier).
+
+## 5.9.7 – „Mit Claude verbinden“: Claude denkt, JARVIS führt aus und zeigt alles
+Dein Wunsch: „Keine Erweiterung, sondern verbinden. Er soll ALLES können, ALLES dürfen, selbstständig, mitdenken – wie im Video von
+Moritz Maaker, mit Design und visuellen Ausführungen.“ (Den Anmeldecode deines Claude-Abos in JARVIS einzusetzen, verbietet Anthropic –
+das baue ich nicht. Der Konnektor ist der offizielle Weg.)
+
+**So funktioniert es:** In Claude (Pro, App am Laptop/Handy oder claude.ai) fügst du einmal den Konnektor „JARVIS“ mit deiner geheimen
+Adresse hinzu. Claude denkt (dein Pro-Abo, ohne API-Key, ohne Extrakosten). Dein JARVIS-Server (gratis, Cloudflare) leitet live weiter:
+| Wer | Rolle |
+|---|---|
+| Claude | Gehirn – plant, entscheidet, ruft JARVIS-Werkzeuge auf |
+| JARVIS-App am Laptop | **Bühne** – führt aus und zeigt alles: Hologramm-Fenster, 3D, Globus, fliegende Dateien, Schlagzeilen, Stimme; „● CLAUDE · LIVE“ oben |
+| PC-Agent | Hände am Computer; springt ein, wenn die App zu ist |
+
+**Claude bekommt ALLE JARVIS-Fähigkeiten** (die App meldet sie selbst an): Anzeigen (ui), Sprechen (jarvis_sprechen), Dateien, Computer,
+Websites, Kalender, Notizen, Timer, Wächter, Routinen, Missionen, Steckbrief, Gedächtnis, Push/Anruf an dich, Anrufe an Dritte (mit Twilio),
+Agenten-Büro, Mini-Apps. Anleitung an Claude: selbstständig handeln, mitdenken, visuell zeigen, Probleme am Computer von sich aus ansprechen.
+**Bestätigung bleibt** (deine Regel): Zahlungen, Löschen, verbindliche Buchungen, Programme starten, Herunterfahren – Fenster am Bildschirm.
+
+| Test | Ergebnis |
+|---|---|
+| Ganzer Weg mit **offiziellem MCP-Client** (wie der Claude-Konnektor) → echter Server-Code mit Live-Hub (lokal per wrangler dev) → echte JARVIS-App im Browser + echter PC-Agent mit echten Dateien: falsche Adresse abgewiesen · niemand online → ehrliche Meldung · nur PC-Agent → Dateien ansehen, Löschen abgelehnt per Fenster · App offen → meldet alle Fähigkeiten, Hologramm-Fenster geht auf, JARVIS spricht, Downloads fliegen live in Ordner (echt verschoben + geprüft), Löschen in der App abgelehnt, rückgängig · App zu → PC-Agent übernimmt | **14/14** ✅ |
+| Server-Logik (+ Konnektor: geheime Adresse, Anmeldung, Werkzeugliste, Mitteilungen) | **33/33** ✅ |
+| Cloudflare-Bündel inkl. Live-Hub (Probelauf) | ✅ 1157 KB |
+| Einrichtungs-Assistent (nachgestelltes Cloudflare): Claude-Adresse wird erzeugt, angezeigt und im Link mitgegeben | ✅ |
+| JARVIS-App 5.9 | **24/24** ✅ · Claude-Erweiterung 9/9 ✅ |
+**Ungetestet (⚪):** mit deinem echten Claude-Konto und echtem Cloudflare (geht erst nach deiner Einrichtung).

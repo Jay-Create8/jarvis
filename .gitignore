@@ -12,3 +12,5 @@ desktop-agent/rueckgaengig.json
 desktop-agent/node/
 desktop-agent/profil*/
 **/.bereit
+desktop-agent/server.json
+**/.dev.vars

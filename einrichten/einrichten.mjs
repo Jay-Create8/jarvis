@@ -82,6 +82,7 @@ if (!st.tokensSet || await yes('Neue Zugangs-Tokens erzeugen? (alte Verbindungen
   st.jarvisToken = null; secrets.JARVIS_TOKEN = token(); secrets.AGENT_TOKEN = token(); secrets.NTFY_TOPIC = 'jarvis-' + token(9).toLowerCase().replace(/[^a-z0-9]/g, '');
   st.ntfy = secrets.NTFY_TOPIC;
 }
+if (!st.mcpToken || secrets.JARVIS_TOKEN) secrets.MCP_TOKEN = token(30);   // 5.9.7: secret address for the Claude connection
 console.log('  Gemini-Key (gratis): aistudio.google.com/apikey → „API-Schlüssel erstellen“. Damit denkt der Server kostenlos (Wächter, Routinen, Telefon).');
 const gk = await askHidden('Gemini API-Key'); if (gk) { if (!/^AIza/.test(gk)) warn('Sieht nicht wie ein Gemini-Key aus (beginnt normalerweise mit AIza) – trotzdem gespeichert.'); secrets.GEMINI_API_KEY = gk; }
 console.log('  Optional: Anthropic-Key (kostet) – nur nötig, wenn du keinen Gemini-Key hast. Sonst einfach leer lassen.');
@@ -123,6 +124,7 @@ if (Object.keys(secrets).length) {
   fs.rmSync(tmp, { force: true });                                    // never left on disk
   if (r.code !== 0) die('Schlüssel konnten nicht gespeichert werden:\n' + r.out.slice(-500));
   if (secrets.JARVIS_TOKEN) { st.tokensSet = true; st.jarvisToken = secrets.JARVIS_TOKEN; st.agentToken = secrets.AGENT_TOKEN; }
+  if (secrets.MCP_TOKEN) st.mcpToken = secrets.MCP_TOKEN;
   save();
   ok('gespeichert: ' + Object.keys(secrets).map((k) => k).join(', '));
 } else ok('nichts Neues');
@@ -158,7 +160,8 @@ ok('App: ' + appUrl + c.y('  (die ersten 1–2 Minuten kann die Adresse noch „
 
 // 8 – connect phone + laptop
 step(8, 'Handy verbinden');
-const setup = Buffer.from(JSON.stringify({ srv: url, srvTok: appTok, ntfy: st.ntfy, ...(st.nummerUsd != null ? { nummerUsd: st.nummerUsd } : {}) })).toString('base64url');   // 5.9: no laptop remote control
+const mcpUrl = st.mcpToken ? `${url}/mcp/${st.mcpToken}` : '';
+const setup = Buffer.from(JSON.stringify({ srv: url, srvTok: appTok, ntfy: st.ntfy, ...(st.nummerUsd != null ? { nummerUsd: st.nummerUsd } : {}), ...(agentTok ? { agentSrvTok: agentTok } : {}), ...(mcpUrl ? { mcpUrl } : {}) })).toString('base64url');   // 5.9.7: + Claude connection
 const link = `${appUrl}/#einrichten=${setup}`;
 try { const q = (await import('qrcode-terminal')).default; console.log('\n  Am Handy mit der Kamera scannen (öffnet JARVIS bereits verbunden):\n'); q.generate(link, { small: true }); }
 catch { console.log('\n  Diesen Link am Handy öffnen (z.B. per Mail an dich selbst schicken):\n  ' + link); }
@@ -166,5 +169,6 @@ console.log('\n  Am Laptop: diesen Link im Browser öffnen, in dem du JARVIS ben
 console.log(`\n  Danach in JARVIS: Einstellungen → KEY EINFÜGEN – gratis: Gemini-Key von aistudio.google.com/apikey (oder Anthropic-Key, kostet). Der Key bleibt nur auf dem Handy.\n  Push: ntfy-App installieren und das Thema ${c.b(st.ntfy || '(bestehendes)')} abonnieren.`);
 if (await yes('Zugangsdaten zusätzlich in JARVIS-Zugang.txt auf diesem Rechner speichern (Backup)?', 'n'))
   fs.writeFileSync(path.join(HERE, 'JARVIS-Zugang.txt'), `JARVIS-Zugang (geheim halten!)\nApp: ${appUrl}\nServer: ${url}\nServer-Token (App): ${appTok}\nPush-Thema (ntfy): ${st.ntfy}\nEinrichtungs-Link: ${link}\n`, { mode: 0o600 });
+if (mcpUrl) console.log('\n' + c.b('🔗 Mit Claude verbinden (dein Claude Pro, ohne API-Key):') + '\n  In Claude: Einstellungen → Konnektoren → „Benutzerdefinierten Konnektor hinzufügen“\n  Name: JARVIS   Adresse (geheim halten!):\n  ' + c.y(mcpUrl) + '\n  (Die Adresse steht nach dem Öffnen des Links oben auch in JARVIS → Einstellungen → MIT CLAUDE VERBINDEN, mit Kopier-Knopf.)');
 console.log(c.g('\n✅ Fertig. ') + 'Nochmal ausführen ist jederzeit möglich (z.B. nach einem Update – dann wird nur neu hochgeladen).\n');
 rl.close();

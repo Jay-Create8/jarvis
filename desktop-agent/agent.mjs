@@ -9,15 +9,15 @@
    - eigenes Browser-Profil (./profil): Logins bleiben gespeichert, dein normaler Browser bleibt unberührt
    ===================================================================== */
 import { chromium } from 'playwright';
-import { WebSocketServer } from 'ws';
+import WSClient, { WebSocketServer } from 'ws';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { FILE_ACTIONS, needsConfirm } from './dateien.mjs';
-import { PC_ACTIONS, needsConfirmPc } from './computer.mjs';
+import { PC_ACTIONS, needsConfirmPc, askHuman } from './computer.mjs';
 
-const AGENT_VER = '5.9.6';
+const AGENT_VER = '5.9.7';
 const PORT = +(process.env.JARVIS_AGENT_PORT || 47321);
 // 5.9.4: the token is kept in token.txt → after a restart JARVIS reconnects by itself (no new token to type in)
 const TOKEN_FILE = fileURLToPath(new URL('./token.txt', import.meta.url));
@@ -190,14 +190,20 @@ const wss = new WebSocketServer({ host: '127.0.0.1', port: PORT });
 wss.on('error', (e) => { console.error(e.code === 'EADDRINUSE' ? `❌ Port ${PORT} ist belegt – läuft der PC-Agent schon? Altes Fenster schliessen oder JARVIS_AGENT_PORT setzen.` : e); process.exit(1); });
 // One execution path for local (WebSocket) and remote (server relay) commands; strictly one after another.
 let chain = Promise.resolve();
-function execute(aktion, args = {}) {
+// ctx.dialog: the job comes from Claude via the server – then a human confirms binding actions in a window on THIS screen
+function execute(aktion, args = {}, ctx = {}) {
   const run = async () => {
     try {
-      if (String(aktion).startsWith('datei:')) return await executeFile(aktion.slice(6), args);
-      if (String(aktion).startsWith('pc:')) return await executeFile(aktion.slice(3), args, PC_ACTIONS, needsConfirmPc, 'Computer');
+      if (aktion === 'config') return { ok: true, data: saveServer(args) };   // 5.9.7: the JARVIS app hands over the server address
+      if (String(aktion).startsWith('datei:')) return await executeFile(aktion.slice(6), args, FILE_ACTIONS, needsConfirm, 'Datei', ctx);
+      if (String(aktion).startsWith('pc:')) return await executeFile(aktion.slice(3), args, PC_ACTIONS, needsConfirmPc, 'Computer', ctx);
       const h = handlers[aktion]; if (!h) throw new Error('Unbekannte Aktion. Verfügbar: ' + Object.keys(handlers).join(', '));
       await ensurePage();
-      const blocked = await guard(aktion, args);
+      let blocked = await guard(aktion, args);
+      if (blocked && ctx.dialog) {
+        if (!(await askHuman('Claude (JARVIS) möchte auf einer Website eine verbindliche Aktion ausführen:\n\n' + blocked.element + '\n\n' + blocked.seite))) return { ok: true, data: { abgebrochen: true, grund: 'Der Nutzer hat im Bestätigungsfenster NEIN gewählt. Nichts wurde abgeschickt.' } };
+        args = { ...args, bestätigung: blocked.code }; blocked = await guard(aktion, args);
+      }
       if (blocked) return { ok: true, data: blocked };
       console.log('→', aktion, JSON.stringify(args).slice(0, 120));
       return { ok: true, data: await h(args) };
@@ -212,9 +218,13 @@ function execute(aktion, args = {}) {
   const p = chain.then(run, run); chain = p.catch(() => {}); return p;
 }
 // 5.9.4: files on the PC. Deleting and starting programs need the human's one-time code (like binding web actions).
-async function executeFile(name, args, table = FILE_ACTIONS, confirm = needsConfirm, label = 'Datei') {
+async function executeFile(name, args, table = FILE_ACTIONS, confirm = needsConfirm, label = 'Datei', ctx = {}) {
   const f = table[name]; if (!f) throw new Error(`Unbekannte ${label}-Aktion. Verfügbar: ` + Object.keys(table).join(', '));
-  if (confirm(name, args)) {
+  if (confirm(name, args) && ctx.dialog) {   // 5.9.7: from Claude via the server → window on this screen
+    const { bestätigung, ...rest } = args; args = rest;
+    const was = name === 'löschen' ? 'Diese Dateien in den JARVIS-Papierkorb verschieben (rückgängig möglich)?\n\n' + [].concat(rest.pfade || []).join('\n') : name === 'duplikate_entfernen' ? `Doppelte Dateien in „${rest.pfad || 'Downloads'}“ in den JARVIS-Papierkorb verschieben? Je eine bleibt.` : name === 'papierkorb_leeren' ? 'Den JARVIS-Papierkorb ENDGÜLTIG leeren?' : name === 'herunterfahren' ? `Den Computer in 60 Sekunden ${rest.art === 'neustart' ? 'NEU STARTEN' : 'HERUNTERFAHREN'}?` : 'Dieses Programm/Skript starten?\n\n' + (rest.pfad || '');
+    if (!(await askHuman('Claude (JARVIS) möchte:\n\n' + was))) return { ok: true, data: { abgebrochen: true, grund: 'Der Nutzer hat im Bestätigungsfenster NEIN gewählt. Nichts wurde ausgeführt.' } };
+  } else if (confirm(name, args)) {
     const { bestätigung, ...rest } = args; const key = name + ' ' + JSON.stringify(rest);
     const p = bestätigung && pendingConfirm.get(bestätigung);
     if (!(p && p.expires > Date.now() && p.action === key)) {
@@ -241,6 +251,32 @@ wss.on('connection', (ws, req) => {
 // 5.2: remote mode – the laptop asks the JARVIS server for jobs, so JARVIS on the PHONE can use this computer.
 // Outbound only (no open port on the internet). Same confirmation lock as locally.
 const SERVER = (process.env.JARVIS_SERVER || '').replace(/\/$/, ''); const SERVER_TOKEN = process.env.JARVIS_AGENT_SERVER_TOKEN || '';
+// 5.9.7: live connection to your JARVIS server – so Claude can use this computer even when the JARVIS app is closed
+const SERVER_FILE = fileURLToPath(new URL('./server.json', import.meta.url));
+let hubConf = (() => { try { return JSON.parse(readFileSync(SERVER_FILE, 'utf8')); } catch { return SERVER && SERVER_TOKEN ? { server: SERVER, token: SERVER_TOKEN } : null; } })();
+let hubWs = null, hubTry = 0, hubTimer = null;
+function saveServer({ server, token } = {}) {
+  if (!/^https?:\/\/[a-z0-9.:-]+\/?$/i.test(String(server || '')) || !/^[A-Za-z0-9_-]{16,128}$/.test(String(token || ''))) throw new Error('Server-Adresse/Token ungültig');
+  const neu = { server: server.replace(/\/$/, ''), token }; const changed = JSON.stringify(neu) !== JSON.stringify(hubConf);
+  hubConf = neu; try { writeFileSync(SERVER_FILE, JSON.stringify(neu)); } catch {}
+  if (changed) { try { hubWs?.close(); } catch {} hubWs = null; clearTimeout(hubTimer); hubStart(); }
+  return { gespeichert: true, verbunden: !!(hubWs && hubWs.readyState === 1) };
+}
+function hubStart() {
+  if (!hubConf?.server || !hubConf?.token || (hubWs && hubWs.readyState <= 1)) return;
+  const ws = hubWs = new WSClient(hubConf.server.replace(/^http/, 'ws') + '/hub/agent?token=' + encodeURIComponent(hubConf.token));
+  let ping = null;
+  ws.on('open', () => { hubTry = 0; console.log('🔗 Mit deinem JARVIS-Server verbunden – Claude kann diesen Computer benutzen (auch wenn die JARVIS-App zu ist).'); ws.send(JSON.stringify({ typ: 'hallo', rolle: 'agent', version: AGENT_VER })); ping = setInterval(() => { try { ws.send('{"typ":"ping"}'); } catch {} }, 30000); });
+  ws.on('message', async (raw) => {
+    let m; try { m = JSON.parse(String(raw)); } catch { return; } if (m.typ !== 'auftrag') return;
+    console.log('🔗 Claude →', m.aktion);
+    const r = await execute(m.aktion, m.args || {}, { dialog: true });
+    try { ws.send(JSON.stringify({ typ: 'ergebnis', id: m.id, ok: r.ok, ergebnis: r.ok ? r.data : undefined, fehler: r.ok ? undefined : String(r.data).slice(0, 600) })); } catch {}
+  });
+  ws.on('close', () => { clearInterval(ping); if (hubWs === ws) hubWs = null; hubTimer = setTimeout(hubStart, Math.min(60000, 3000 * 2 ** Math.min(5, hubTry++))); });
+  ws.on('error', () => {});
+}
+hubStart();
 if (SERVER && SERVER_TOKEN) {
   const H = { authorization: 'Bearer ' + SERVER_TOKEN, 'content-type': 'application/json' };
   let fails = 0;

@@ -10,6 +10,7 @@
    ===================================================================== */
 import Anthropic from '@anthropic-ai/sdk';
 import * as G from '../js/gemini.js';
+import { TOOLS as PC_TOOLS, BY as PC_BY, toApp, toAgent } from '../desktop-agent/mcp-tools.mjs';
 
 const MODEL_CALL = 'claude-haiku-5-5';    // fast replies on the phone
 const MODEL_WATCH = 'claude-opus-5-5';    // careful background checks
@@ -348,10 +349,122 @@ export async function cron(env, origin) {
 }
 
 /* ---------- HTTP router ---------- */
+/* =====================================================================
+   5.9.7 „MIT CLAUDE VERBINDEN“ – Claude (dein Pro-Abo, Claude-App am Laptop/Handy) bekommt JARVIS als Konnektor.
+   Claude → POST /mcp/<MCP_TOKEN> (MCP über HTTP) → Hub (Durable Object, eine Live-Verbindung) → JARVIS-App am Laptop
+   (zeigt alles visuell: Hologramm-Fenster, fliegende Dateien, Stimme) bzw. – wenn die App zu ist – direkt der PC-Agent.
+   Beide verbinden sich von sich aus mit dem Hub (ausgehend, keine offenen Ports). Löschen/Zahlen/Herunterfahren bestätigt
+   weiterhin ein Mensch am Bildschirm.
+   ===================================================================== */
+const CLAUDE_INSTRUCTIONS = `Du bist J.A.R.V.I.S., der persönliche Assistent des Nutzers, und lebst auf seinem Computer. Antworte auf Deutsch, locker wie ein Kumpel, mit ein paar Emojis.
+- Handle selbstständig: erledige Aufgaben sofort mit deinen Werkzeugen statt zu erklären, wie es geht. Denk einen Schritt weiter (Folgeaufgaben, Termine, Erinnerungen, Ordnung) und mach es, wenn es kostenlos und umkehrbar ist.
+- Die JARVIS-App auf dem Laptop ist deine Bühne: Zeig Ergebnisse visuell mit ui (Hologramm-Fenster, 3D-Modelle, Globus mit Routen, Karten, Diagramme, Dashboards, Aufgaben) und sag wichtige Sätze laut mit jarvis_sprechen (kurz, wie JARVIS).
+- Computer: pc_dateien (alle Dateien des Benutzerordners: aufräumen, suchen, lesen, Duplikate), pc_steuerung (Programme, Lautstärke, Musik, Bildschirm auf Wunsch, Systemzustand, sperren).
+- Zu Beginn eines Gesprächs kurz jarvis_status prüfen; meldet der Computer Probleme (Festplatte fast voll, Akku schwach), sprich es an und biete an, es zu lösen.
+- Zahlungen, Löschen und verbindliche Buchungen bestätigt der Nutzer selbst in einem Fenster am Bildschirm – frag nicht zusätzlich im Chat.`;
+export class Hub {   // plain Durable Object class (WebSocket hibernation) – one per JARVIS installation
+  constructor(state, env) {
+    this.state = state; this.env = env; this.pending = new Map();
+    try { state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"typ":"ping"}', '{"typ":"pong"}')); } catch {}
+  }
+  async fetch(req) {
+    const u = new URL(req.url);
+    if (req.headers.get('upgrade') === 'websocket') {
+      const role = u.searchParams.get('rolle') === 'agent' ? 'agent' : 'app';
+      for (const old of this.state.getWebSockets(role)) try { old.close(4000, 'neue Verbindung'); } catch {}
+      const pair = new WebSocketPair(); this.state.acceptWebSocket(pair[1], [role]);
+      return new Response(null, { status: 101, webSocket: pair[0] });
+    }
+    const reg = (await this.state.storage.get('apptools')) || null;
+    const apps = this.state.getWebSockets('app'), agents = this.state.getWebSockets('agent');
+    if (u.pathname === '/status') return Response.json({ app: apps.length > 0, agent: agents.length > 0, appVersion: reg?.version || null, werkzeuge: reg?.tools?.length || 0 });
+    if (u.pathname === '/tools') return Response.json({ tools: reg?.tools || null });
+    if (u.pathname === '/call') {
+      const { tool, args = {} } = await req.json(); const id = crypto.randomUUID();
+      let ws = null, msg = null;
+      const appHas = reg?.tools?.some((t) => t.name === tool);
+      if (apps.length && (appHas || PC_BY[tool])) { ws = apps[0]; const m = appHas ? { tool, input: args } : toApp(tool, args); msg = { typ: 'auftrag', id, tool: m.tool, args: m.input }; }
+      else if (agents.length && toAgent(tool, args)) { ws = agents[0]; const m = toAgent(tool, args); msg = { typ: 'auftrag', id, aktion: m.aktion, args: m.args }; }
+      if (!ws) return Response.json({ ok: false, fehler: apps.length || agents.length ? 'Dafür muss die JARVIS-App am Laptop offen sein (der PC-Agent allein kann das nicht).' : 'JARVIS ist gerade nicht online. Öffne am Laptop die JARVIS-App (oder starte den PC-Agent) – dann geht es sofort.' });
+      const res = await new Promise((resolve) => {
+        const t = setTimeout(() => { this.pending.delete(id); resolve({ ok: false, fehler: 'JARVIS hat nicht rechtzeitig geantwortet (läuft die Aufgabe noch? Dann gleich nochmal nachfragen).' }); }, 110000);
+        this.pending.set(id, { resolve, t });
+        try { ws.send(JSON.stringify(msg)); } catch (e) { clearTimeout(t); this.pending.delete(id); resolve({ ok: false, fehler: 'Verbindung zu JARVIS unterbrochen – bitte nochmal.' }); }
+      });
+      return Response.json(res);
+    }
+    return new Response('not found', { status: 404 });
+  }
+  async webSocketMessage(ws, raw) {
+    let m; try { m = JSON.parse(typeof raw === 'string' ? raw : new TextDecoder().decode(raw)); } catch { return; }
+    if (m.typ === 'hallo' && Array.isArray(m.tools)) await this.state.storage.put('apptools', { tools: m.tools.slice(0, 90), version: String(m.version || ''), ts: Date.now() });
+    if (m.typ === 'ergebnis' && this.pending.has(m.id)) { const p = this.pending.get(m.id); this.pending.delete(m.id); clearTimeout(p.t); p.resolve({ ok: !!m.ok, ergebnis: m.ergebnis, fehler: m.fehler }); }
+  }
+  async webSocketClose(ws, code) { try { ws.close(code === 1005 ? 1000 : code, 'tschüss'); } catch {} }
+  async webSocketError() {}
+}
+const hubStub = (env) => env.HUB ? env.HUB.get(env.HUB.idFromName('jarvis')) : null;
+async function hubJson(env, path, body) {
+  const stub = hubStub(env); if (!stub) return { ok: false, fehler: 'Hub fehlt (Server neu hochladen)' };
+  const r = await stub.fetch('https://hub' + path, body ? { method: 'POST', body: JSON.stringify(body) } : {}); return r.json();
+}
+// tool results (string, object, or Anthropic-style content blocks with images) → MCP content
+function mcpContent(r) {
+  if (Array.isArray(r) && r.every((b) => b && typeof b === 'object' && b.type)) return r.map((b) => b.type === 'image' ? { type: 'image', data: b.source?.data || b.data, mimeType: b.source?.media_type || b.mimeType || 'image/jpeg' } : { type: 'text', text: String(b.text ?? JSON.stringify(b)) });
+  if (r && typeof r === 'object' && typeof r.bild === 'string') return [{ type: 'image', data: r.bild.split(',')[1], mimeType: 'image/jpeg' }, { type: 'text', text: 'Bildschirmfoto (aktuell).' }];
+  return [{ type: 'text', text: typeof r === 'string' ? r : JSON.stringify(r ?? 'ok', null, 1) }];
+}
+const STATUS_TOOL = { name: 'jarvis_status', description: 'Ist JARVIS auf dem Laptop gerade erreichbar (App/PC-Agent) – und wie geht es dem Computer (Festplatte, Akku, Warnungen)?', inputSchema: { type: 'object', properties: {} } };
+async function mcpOne(m, env) {
+  const ok = (result) => ({ jsonrpc: '2.0', id: m.id, result }), err = (code, message) => ({ jsonrpc: '2.0', id: m.id, error: { code, message } });
+  const p = m.params || {};
+  if (m.method === 'initialize') return ok({ protocolVersion: p.protocolVersion || '2025-06-18', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'jarvis', title: 'J.A.R.V.I.S.', version: '5.9.7' }, instructions: CLAUDE_INSTRUCTIONS });
+  if (m.method === 'ping') return ok({});
+  if (m.method === 'tools/list') {
+    const r = await hubJson(env, '/tools');
+    const tools = r.tools?.length ? r.tools.map((t) => ({ name: t.name, description: String(t.description || '').slice(0, 30000), inputSchema: t.input_schema || t.inputSchema || { type: 'object', properties: {} } })) : PC_TOOLS;
+    return ok({ tools: [STATUS_TOOL, ...tools] });
+  }
+  if (m.method === 'tools/call') {
+    if (p.name === 'jarvis_status') {
+      const st = await hubJson(env, '/status'); let pc = null;
+      if (st.app || st.agent) { const r = await hubJson(env, '/call', { tool: st.app ? 'pc_steuerung' : 'systemzustand', args: st.app ? { aktion: 'system' } : {} }); if (r.ok) pc = r.ergebnis; }
+      return ok({ content: [{ type: 'text', text: JSON.stringify({ jarvis_app_offen: st.app, pc_agent_verbunden: st.agent, app_version: st.appVersion, computer: pc, hinweis: st.app || st.agent ? undefined : 'Am Laptop die JARVIS-App öffnen (oder den PC-Agent starten).' }, null, 1) }] });
+    }
+    const r = await hubJson(env, '/call', { tool: p.name, args: p.arguments || {} });
+    return ok(r.ok ? { content: mcpContent(r.ergebnis) } : { content: [{ type: 'text', text: 'Fehler: ' + (r.fehler || 'unbekannt') }], isError: true });
+  }
+  if (m.method === 'resources/list') return ok({ resources: [] });
+  if (m.method === 'prompts/list') return ok({ prompts: [] });
+  return err(-32601, 'Method not found: ' + m.method);
+}
+async function mcpHttp(req, env, url) {
+  const tok = url.pathname.split('/')[2] || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!env.MCP_TOKEN || tok !== env.MCP_TOKEN) return json({ fehler: 'nicht autorisiert' }, 401);
+  if (req.method === 'GET') return new Response('Nur POST (MCP über HTTP)', { status: 405, headers: { allow: 'POST, DELETE' } });
+  if (req.method === 'DELETE') return new Response(null, { status: 200 });
+  if (req.method !== 'POST') return new Response(null, { status: 405 });
+  let body; try { body = await req.json(); } catch { return json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400); }
+  const list = Array.isArray(body) ? body : [body]; const out = [];
+  for (const m of list) if (m && m.id !== undefined && m.id !== null) out.push(await mcpOne(m, env));
+  if (!out.length) return new Response(null, { status: 202 });
+  return json(Array.isArray(body) ? out : out[0]);
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url); const origin = env.PUBLIC_URL || url.origin;
     if (req.method === 'OPTIONS') return json({});
+    // --- 5.9.7: Claude connector (MCP) + live connections of the JARVIS app and the PC agent ---
+    if (url.pathname === '/mcp' || url.pathname.startsWith('/mcp/')) return mcpHttp(req, env, url);
+    if (url.pathname === '/hub/app' || url.pathname === '/hub/agent') {
+      const role = url.pathname.endsWith('agent') ? 'agent' : 'app', tok = url.searchParams.get('token') || '';
+      if (!(role === 'app' ? env.JARVIS_TOKEN : env.AGENT_TOKEN) || tok !== (role === 'app' ? env.JARVIS_TOKEN : env.AGENT_TOKEN)) return json({ fehler: 'nicht autorisiert' }, 401);
+      if (req.headers.get('upgrade') !== 'websocket') return json({ fehler: 'WebSocket erwartet' }, 426);
+      const stub = hubStub(env); if (!stub) return json({ fehler: 'Hub fehlt' }, 500);
+      const u = new URL(req.url); u.searchParams.delete('token'); u.searchParams.set('rolle', role);
+      return stub.fetch(new Request(u.toString(), req));
+    }
     // --- Twilio webhooks (signature-checked) ---
     if (url.pathname.startsWith('/twiml/')) {
       const params = Object.fromEntries(await req.formData().then((f) => [...f.entries()]).catch(() => []));

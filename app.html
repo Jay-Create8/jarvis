@@ -381,7 +381,9 @@ body.immersive #chatToggle{display:grid}
   <div class="field"><label>Max. Telefonanrufe pro Tag</label><input id="cMaxCalls" type="number" min="0" max="20"></div>
   <div class="field"><label>Anruf-Budget pro Monat (USD, geschätzt)</label><input id="cBudget" type="number" min="0" max="200" step="1"></div>
   <div class="field"><label>Deine Kontaktregeln</label><textarea id="cfgRules" placeholder="z.B. Nach 22 Uhr nur bei Notfällen anrufen. Börsen-News nur per Push."></textarea></div>
-  <h3>JARVIS IN DER CLAUDE-APP (MIT CLAUDE PRO)</h3>
+  <h3>🔗 MIT CLAUDE VERBINDEN (DEIN CLAUDE PRO)</h3>
+  <div id="claudeBox"></div>
+  <h3>JARVIS IN DER CLAUDE-APP (ERWEITERUNG – NUR AM LAPTOP)</h3>
   <p class="hint">Hast du Claude Pro? Dann kann <b>Claude selbst</b> dein JARVIS am Computer sein – <b>ohne API-Key, ohne Extrakosten</b>.
   1. Claude-App für Windows/Mac installieren (<a href="https://claude.ai/download" target="_blank" style="color:var(--cyan2)">claude.ai/download</a>) und anmelden.
   2. <a href="JARVIS-fuer-Claude.mcpb" download id="claudeExt">📥 JARVIS-Erweiterung herunterladen</a> (85 KB) → <b>Doppelklick</b> → in Claude „Installieren“.
@@ -480,7 +482,7 @@ body.immersive #chatToggle{display:grid}
 <script type="module">
 import * as G from './js/gemini.js';   // 5.8: free brain (Google Gemini)
 import * as L from './loader.js';       // 5.8: resumable part-wise loader
-const APP_VER = '5.9.6';   // written by tools/build-parts.mjs
+const APP_VER = '5.9.7';   // written by tools/build-parts.mjs
 // 5.9.5.2: no silent failures – every unexpected error is shown (max. one notice per 20 s) and kept for the diagnosis
 const errLog = [];
 function noteError(where, e, show = true){
@@ -1554,7 +1556,8 @@ function agentConnect(){
   if (!cfg.agentTok || (agentWs && agentWs.readyState <= 1)) return;
   try{
     agentWs = new WebSocket(`ws://127.0.0.1:47321/?token=${encodeURIComponent(cfg.agentTok)}`);
-    agentWs.onopen = () => { const e = document.getElementById('agentState'); if (e) e.textContent = 'verbunden ✓'; setTimeout(pcCheck, 4000); pcAutostartState(); };
+    agentWs.onopen = () => { const e = document.getElementById('agentState'); if (e) e.textContent = 'verbunden ✓'; setTimeout(pcCheck, 4000); pcAutostartState();
+      if (cfg.srv && cfg.agentSrvTok) agentCall('config', {server:cfg.srv, token:cfg.agentSrvTok}, 15000).catch(() => {}); };   // 5.9.7
     agentWs.onmessage = (e) => { const m = JSON.parse(e.data); agentReq.get(m.rid)?.(m); agentReq.delete(m.rid); };
     agentWs.onclose = () => { agentWs = null; const e = document.getElementById('agentState'); if (e) e.textContent = 'nicht verbunden'; };
   }catch{}
@@ -2767,7 +2770,14 @@ function renderLists(){
   { const fl = document.getElementById('fixList'); if (fl) mk(sttFix, fl, f => `„${esc(f.falsch)}“ → „${esc(f.richtig)}“`, f => { sttFix = sttFix.filter(x => x !== f); store.set('sttFix', sttFix); renderLists(); }); }
   { const dl = document.getElementById('decList'); if (dl) dl.innerHTML = decisions.length ? decisions.slice(-15).reverse().map(d => `<div class="memitem"><span><b>${d.wer === 'JARVIS' ? '🧠 JARVIS' : '👤 du'}</b> · ${esc(new Date(d.ts).toLocaleString('de-CH', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}))}<br><span class="hint">${esc(d.was || '')}${d.warum ? ' – ' + esc(d.warum) : ''}${d.ok === false ? ' (abgelehnt)' : ''}</span></span></div>`).join('') : '<p class="hint">Noch nichts.</p>'; }
 }
-function openSettings(){ fillSettings(); fillProfil(); { const v = document.getElementById('verNow'); if (v) v.textContent = 'Version ' + APP_VER; } $('#settings').classList.add('open'); }
+function fillClaudeBox(){
+  const b = document.getElementById('claudeBox'); if (!b) return;
+  if (!cfg.srv){ b.innerHTML = `<p class="hint">Claude denkt (dein Pro-Abo, ohne API-Key), JARVIS führt aus und zeigt alles. Dafür braucht es einmal deinen <b>JARVIS-Server</b> (gratis bei Cloudflare): <a href="JARVIS-Einrichtung.zip" download style="color:var(--cyan2)">📥 Einrichtung herunterladen</a> → entpacken → im Ordner „einrichten“ Doppelklick auf <b>JARVIS-einrichten.cmd</b>. Am Ende bekommst du die Claude-Adresse.</p>`; return; }
+  if (!cfg.mcpUrl){ b.innerHTML = `<p class="hint">Dein Server ist da, aber noch ohne Claude-Anschluss. Bitte den Einrichtungs-Assistenten nochmal laufen lassen (<a href="JARVIS-Einrichtung.zip" download style="color:var(--cyan2)">📥 neue Einrichtung</a>) und den Link am Schluss öffnen.</p>`; return; }
+  b.innerHTML = `<p class="hint">1. In Claude (claude.ai, App am Laptop oder Handy): <b>Einstellungen → Konnektoren → „Benutzerdefinierten Konnektor hinzufügen“</b>.<br>2. Name: <b>JARVIS</b> · Adresse: <button class="btn" id="copyMcp" style="padding:4px 10px">📋 ADRESSE KOPIEREN</button> und einfügen → Hinzufügen.<br>3. Im Chat (unten beim „+“/Werkzeuge) JARVIS einschalten – fertig. Diese App am Laptop offen lassen: Sie ist Claudes Bühne.</p><p class="hint">Verbindung: <span id="claudeState">${hubWs && hubWs.readyState === 1 ? 'verbunden ✓ – Claude kann JARVIS benutzen' : 'verbinde …'}</span></p>`;
+  b.querySelector('#copyMcp').onclick = async () => { try{ await navigator.clipboard.writeText(cfg.mcpUrl); toast('📋 Claude-Adresse kopiert – geheim halten!'); }catch{ prompt('Claude-Adresse (geheim halten):', cfg.mcpUrl); } };
+}
+function openSettings(){ fillSettings(); fillProfil(); fillClaudeBox(); { const v = document.getElementById('verNow'); if (v) v.textContent = 'Version ' + APP_VER; } $('#settings').classList.add('open'); }
 function fillGemNow(){   // 5.8: what Gemini does today (free – counted on this device)
   const e = document.getElementById('gemNow'); if (!e) return;
   const u = gemUseToday(), n = Object.values(u.n).reduce((a, b) => a + b, 0);
@@ -3458,6 +3468,57 @@ function greet(){
 }
 
 /* =========================================================
+   5.9.7 MIT CLAUDE VERBINDEN – Claude (Pro-Abo) denkt, diese App ist die Bühne: führt Claudes Werkzeuge aus,
+   zeigt alles visuell (Hologramm-Fenster, fliegende Dateien, Globus …) und spricht. Live-Verbindung zum eigenen Server.
+   ========================================================= */
+const CLAUDE_SKIP = new Set(['files', 'hoerfehler', 'rueckmeldung', 'look_with_camera']);
+const SPEAK_DEF = {name:'jarvis_sprechen', description:'JARVIS sagt einen kurzen Satz laut am Laptop (seine Stimme) und zeigt ihn gross an – für wichtige Ergebnisse, Begrüssungen, Warnungen. Kurz halten (1–2 Sätze), wie JARVIS.', input_schema:{type:'object', properties:{text:{type:'string'}, schlagzeile:{type:'string', description:'optional: 1–3 Wörter gross eingeblendet, z.B. "ERLEDIGT"'}}, required:['text']}};
+function claudeTools(){
+  return [SPEAK_DEF, ...Object.entries(tools).filter(([n]) => !CLAUDE_SKIP.has(n)).map(([name, t]) => ({name, description:t.def.description, input_schema:t.def.input_schema}))];
+}
+let hubWs = null, hubTry = 0, hubTimer = null, hubPing = null;
+function hubState(t){
+  const e = document.getElementById('claudeState'); if (e) e.textContent = t;
+  let b = document.getElementById('claudeBadge');
+  if (!b){ b = document.createElement('div'); b.id = 'claudeBadge'; b.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 6px);transform:translateX(-50%);z-index:60;font:700 10px Orbitron,sans-serif;letter-spacing:.18em;color:var(--cyan);padding:4px 10px;border:1px solid rgba(var(--acc-rgb),.45);border-radius:999px;background:rgba(0,10,18,.55);backdrop-filter:blur(6px);pointer-events:none;display:none'; document.body.append(b); }
+  const on = /verbunden ✓/.test(t); b.style.display = on ? 'block' : 'none'; b.innerHTML = '● CLAUDE · LIVE';
+}
+function hubConnect(now = false){
+  if (!cfg.srv || !cfg.srvTok || (hubWs && hubWs.readyState <= 1)) return;
+  clearTimeout(hubTimer);
+  try{
+    const ws = hubWs = new WebSocket(cfg.srv.replace(/^http/, 'ws') + '/hub/app?token=' + encodeURIComponent(cfg.srvTok));
+    ws.onopen = () => { hubTry = 0; ws.send(JSON.stringify({typ:'hallo', rolle:'app', version:APP_VER, tools:claudeTools()})); hubState('verbunden ✓ – Claude kann JARVIS benutzen'); clearInterval(hubPing); hubPing = setInterval(() => { try{ ws.send('{"typ":"ping"}'); }catch{} }, 30000); };
+    ws.onmessage = (e) => { let m; try{ m = JSON.parse(e.data); }catch{ return; } if (m.typ === 'auftrag') claudeJob(ws, m); };
+    ws.onclose = () => { clearInterval(hubPing); if (hubWs === ws) hubWs = null; hubState('getrennt – verbinde neu …'); hubTimer = setTimeout(hubConnect, Math.min(60000, 3000 * 2 ** Math.min(5, hubTry++))); };
+    ws.onerror = () => {};
+  }catch(e){ noteError('Claude-Verbindung', e, false); }
+}
+let claudeLast = 0;
+async function claudeJob(ws, m){
+  const reply = (o) => { try{ ws.send(JSON.stringify({typ:'ergebnis', id:m.id, ...o})); }catch{} };
+  const label = m.tool === 'jarvis_sprechen' ? 'spricht' : (tools[m.tool]?.label || m.tool);
+  if (Date.now() - claudeLast > 20000) sysLine('🔗 <b>Claude</b> steuert JARVIS');
+  claudeLast = Date.now();
+  const chip = document.createElement('div'); chip.className = 'sys'; chip.innerHTML = `⚙️ Claude → ${esc(label)}${m.args?.aktion ? ' · ' + esc(String(m.args.aktion)) : ''}`; logEl.append(chip); scrollDown();
+  setState('think'); hud.pulse?.(.7);
+  try{
+    let r;
+    if (m.tool === 'jarvis_sprechen'){
+      const t = String(m.args?.text || '').slice(0, 400);
+      if (m.args?.schlagzeile) wm.headline?.(String(m.args.schlagzeile).slice(0, 28).toUpperCase(), '');
+      addMsg('jarvis', md(t)); if (cfg.speak) speak(t); r = {gesagt:true};
+    } else {
+      const t = tools[m.tool]; if (!t || CLAUDE_SKIP.has(m.tool)) throw new Error('Unbekanntes Werkzeug: ' + m.tool);
+      r = await t.run(m.args || {});
+    }
+    chip.innerHTML += ' ✓'; reply({ok:true, ergebnis:r});
+  }catch(e){ chip.innerHTML += ' ⚠ ' + esc(String(e.message || e).slice(0, 120)); reply({ok:false, fehler:String(e.message || e).slice(0, 600)}); }
+  finally{ if (!busy) setState(ttsQueue ? 'speak' : 'idle'); }
+}
+setTimeout(() => hubConnect(), 3000);
+
+/* =========================================================
    5.9.5.2 SELF-DIAGNOSIS – „diagnose“ im Chat oder Knopf in den Einstellungen
    Echte Mini-Anfragen (ohne Kosten bei Gemini; Claude ca. 0.0001 $), PC-Agent, Server, Version, letzte Fehler.
    ========================================================= */
@@ -3558,8 +3619,10 @@ async function importSetupLink(){
   if (!okUrl || !okTok || (d.ntfy && !/^[a-z0-9_-]{6,64}$/.test(d.ntfy))){ toast('Einrichtungs-Link ungültig – nichts übernommen.'); return true; }
   const yes = await requireApproval({art:'Einrichtung übernehmen', was:`JARVIS-Server ${d.srv}${d.ntfy ? ' · Push-Thema ' + d.ntfy : ''}${d.agentRemote ? ' · PC-Agent über den Server' : ''}`, wo:'Nur übernehmen, wenn der Link aus DEINEM Einrichtungs-Assistenten stammt.', key:'setup:' + d.srv});
   if (!yes) return true;
+  if (typeof d.agentSrvTok === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(d.agentSrvTok)) cfg.agentSrvTok = d.agentSrvTok;   // 5.9.7
+  if (typeof d.mcpUrl === 'string' && /^https:\/\/[a-z0-9.-]+\/mcp\/[A-Za-z0-9_-]{16,128}$/i.test(d.mcpUrl)) cfg.mcpUrl = d.mcpUrl;
   Object.assign(cfg, {srv:d.srv.replace(/\/$/, ''), srvTok:d.srvTok, ...(d.ntfy ? {ntfy:d.ntfy} : {}), agentRemote:!!d.agentRemote, ...(typeof d.nummerUsd === 'number' && d.nummerUsd >= 0 && d.nummerUsd <= 50 ? {nummerUsd:d.nummerUsd} : {})}); store.set('cfg', cfg); refreshSrvInfo();
-  sysLine('🔗 <b>Einrichtung übernommen</b> · Server verbunden'); syncWatchersToServer();
+  sysLine('🔗 <b>Einrichtung übernommen</b> · Server verbunden' + (cfg.mcpUrl ? ' · <b>Claude kann jetzt verbunden werden</b> (Einstellungen → MIT CLAUDE VERBINDEN)' : '')); syncWatchersToServer(); hubConnect(true);
   try{ const r = await srv('/api/status'); sysLine(`✅ Server antwortet · Telefon: ${r.twilio ? 'eingerichtet' : 'nicht eingerichtet'} · Push: ${r.ntfy ? 'ja' : 'nein'}`); }catch(e){ sysLine('⚠️ Server antwortet noch nicht: ' + esc(e.message)); }
   return true;
 }

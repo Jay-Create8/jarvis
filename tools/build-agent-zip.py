@@ -13,7 +13,7 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
 print(out, os.path.getsize(out), 'Bytes')
 
 # 5.9.4.2: server setup (calls, watchers when the app is closed) as its own small download
-SETUP = [('einrichten', f) for f in ['JARVIS-einrichten.cmd', 'JARVIS-einrichten.command', 'einrichten.mjs', 'node-holen.ps1', 'package.json']] + \
+SETUP = [('desktop-agent', 'mcp-tools.mjs')] + [('einrichten', f) for f in ['JARVIS-einrichten.cmd', 'JARVIS-einrichten.command', 'einrichten.mjs', 'node-holen.ps1', 'package.json']] + \
         [('server', f) for f in ['worker.js', 'wrangler.toml', 'package.json', 'package-lock.json', 'ANLEITUNG-SERVER.md']] + [('js', 'gemini.js'), ('', 'app-url.txt')]
 LIES = """JARVIS - Anrufe & Server einrichten (keine Admin-Rechte noetig)
 =================================================================

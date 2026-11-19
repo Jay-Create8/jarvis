@@ -6,11 +6,11 @@ import { execFileSync } from 'node:child_process';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'), OUT = join(ROOT, 'build-claude-ext'), CLI = process.argv[2];
 const ver = (readFileSync(join(ROOT, 'desktop-agent', 'mcp.mjs'), 'utf8').match(/const VERSION = '([^']+)'/) || [])[1];
 rmSync(OUT, { recursive: true, force: true }); mkdirSync(join(OUT, 'server'), { recursive: true });
-for (const f of ['mcp.mjs', 'dateien.mjs', 'computer.mjs']) copyFileSync(join(ROOT, 'desktop-agent', f), join(OUT, 'server', f));
+for (const f of ['mcp.mjs', 'mcp-tools.mjs', 'dateien.mjs', 'computer.mjs']) copyFileSync(join(ROOT, 'desktop-agent', f), join(OUT, 'server', f));
 copyFileSync(join(ROOT, 'icon-512.png'), join(OUT, 'icon.png'));
 // tool list for the install dialog = the server's own list
-const src = readFileSync(join(ROOT, 'desktop-agent', 'mcp.mjs'), 'utf8');
-const tools = [...src.matchAll(/^\s*\['([a-z_]+)', '[^']+', '([^']+)'/gm)].map((m) => ({ name: m[1], description: m[2].replace(/ Pfad: .*$/, '').slice(0, 200) }));
+const { TOOLS } = await import(join(ROOT, 'desktop-agent', 'mcp-tools.mjs'));
+const tools = TOOLS.map((t) => ({ name: t.name, description: t.description.replace(/ Pfad: .*$/, '').slice(0, 200) }));
 const manifest = {
   manifest_version: '0.2', name: 'jarvis-computer', display_name: 'JARVIS – dein Computer', version: ver,
   description: 'Gibt Claude die Hände von JARVIS: Dateien aufräumen und finden, Programme öffnen, Lautstärke, Musik, Bildschirm, Systemzustand – lokal, ohne API-Key.',
