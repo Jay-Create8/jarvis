@@ -273,3 +273,9 @@ Agenten-Büro, Mini-Apps. Anleitung an Claude: selbstständig handeln, mitdenken
 | Einrichtungs-Assistent (nachgestelltes Cloudflare): Claude-Adresse wird erzeugt, angezeigt und im Link mitgegeben | ✅ |
 | JARVIS-App 5.9 | **24/24** ✅ · Claude-Erweiterung 9/9 ✅ |
 **Ungetestet (⚪):** mit deinem echten Claude-Konto und echtem Cloudflare (geht erst nach deiner Einrichtung).
+
+## 5.9.7.1 – Einrichtung: „Zugriff verweigert“ beim Umbenennen
+Dein Screenshot: Node.js wurde geladen und entpackt, aber das Umbenennen des Ordners scheiterte („Zugriff verweigert“) – typisch, wenn
+der Virenschutz frisch entpackte Dateien kurz festhält. Jetzt wird **nichts mehr umbenannt**: Die Starter (Einrichtung und PC-Agent)
+benutzen den Ordner `node-v24.22.3-win-x64` direkt und erkennen ihn auch, wenn er schon da ist (kein zweiter Download).
+⚪ Auf echtem Windows ungetestet (kein Windows hier) – die Befehle sind dieselben wie vorher, nur ohne Umbenennen.
