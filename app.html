@@ -482,7 +482,7 @@ body.immersive #chatToggle{display:grid}
 <script type="module">
 import * as G from './js/gemini.js';   // 5.8: free brain (Google Gemini)
 import * as L from './loader.js';       // 5.8: resumable part-wise loader
-const APP_VER = '5.9.7';   // written by tools/build-parts.mjs
+const APP_VER = '5.9.7.3';   // written by tools/build-parts.mjs
 // 5.9.5.2: no silent failures – every unexpected error is shown (max. one notice per 20 s) and kept for the diagnosis
 const errLog = [];
 function noteError(where, e, show = true){
@@ -3381,7 +3381,7 @@ $('#runSelfTest').onclick = () => selfTest();
 $('#pasteKey').onclick = async () => {
   try{ const t = (await navigator.clipboard.readText()).trim();
     if (/^sk-ant-[\w-]{20,}$/.test(t)){ $('#cfgKey').value = t; cfg.provider = 'claude'; const ps = document.querySelector('#settings [data-k="provider"]'); if (ps) ps.value = 'claude'; store.set('cfg', cfg); toast('🔑 Claude-Key eingefügt – JARVIS denkt ab jetzt mit Claude (Kostendeckel bleibt). Jetzt „ALLES FREISCHALTEN“.'); }
-    else if (/^AIza[\w-]{30,}$/.test(t)){ $('#cfgGemKey').value = t; cfg.gemKey = t; store.set('cfg', cfg); toast('🆓 Gemini-Key eingefügt – ich prüfe ihn kurz …');
+    else if (/^(AIza[\w-]{30,}|AQ\.?[\w.-]{20,})$/.test(t)){   // 5.9.7.3: Google's newer keys start with AQ $('#cfgGemKey').value = t; cfg.gemKey = t; store.set('cfg', cfg); toast('🆓 Gemini-Key eingefügt – ich prüfe ihn kurz …');
       try{ const i = await gemSetup(true); toast(`✅ Gemini-Key funktioniert (${i.lite}). Jetzt „ALLES FREISCHALTEN“.`); }catch(e){ toast(gemErrorText(e)); } fillGemNow(); }
     else toast('In der Zwischenablage ist kein Key. Gratis: aistudio.google.com/apikey → „API-Schlüssel erstellen“ → kopieren.'); }
   catch{ toast('Einfügen nicht erlaubt – halte im Feld gedrückt und wähle „Einfügen“.'); }

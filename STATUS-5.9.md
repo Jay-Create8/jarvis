@@ -284,3 +284,8 @@ benutzen den Ordner `node-v24.22.3-win-x64` direkt und erkennen ihn auch, wenn e
 Beim Einfügen des Keys sieht man nichts – du hast ihn deshalb mehrmals eingefügt. Jetzt: Hinweis „EINMAL einfügen, dann Enter“,
 danach Bestätigung „✓ 39 Zeichen erhalten (AIza…••••••)“, und ein mehrfach eingefügter Key wird automatisch auf einmal gekürzt.
 Test (nachgestelltes Cloudflare): 5× eingefügt → „Mehrfach eingefügt – ich nehme ihn einmal“, 39 Zeichen ✅
+
+## 5.9.7.3 – Neues Google-Key-Format
+Dein Gemini-Key beginnt mit „AQ“ – das ist ein neueres Google-Format. Die Einrichtung hat ihn trotzdem gespeichert, warnte aber
+unnötig; der Knopf „KEY EINFÜGEN“ in JARVIS erkannte ihn nicht. Jetzt werden „AIza…“ und „AQ…“ erkannt. ⚪ Ob dein AQ-Key bei der
+Gemini-Schnittstelle funktioniert, zeigt „diagnose“ in JARVIS (kein echter Key hier zum Testen).

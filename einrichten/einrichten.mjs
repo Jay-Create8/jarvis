@@ -44,7 +44,7 @@ async function askHidden(q) {
   process.stdout.write(`  ${q} (EINMAL einfügen mit Strg+V, dann Enter – man sieht nichts, leer = überspringen): `);
   mute = true; let v = (await nextLine()).trim(); mute = false; process.stdout.write('\n');
   // 5.9.7.2: pasted several times? (nothing is visible, so that happens) → keep the first copy
-  for (const pre of ['AIza', 'sk-ant-']) { const i = v.indexOf(pre, 1); if (v.startsWith(pre) && i > 0 && v.slice(0, i).repeat(Math.round(v.length / i)) === v) { v = v.slice(0, i); console.log(c.y('  ! Mehrfach eingefügt – ich nehme ihn einmal.')); } }
+  for (const pre of ['AIza', 'AQ.', 'sk-ant-']) { const i = v.indexOf(pre, 1); if (v.startsWith(pre) && i > 0 && v.slice(0, i).repeat(Math.round(v.length / i)) === v) { v = v.slice(0, i); console.log(c.y('  ! Mehrfach eingefügt – ich nehme ihn einmal.')); } }
   if (v) console.log(c.g('  ✓ ') + `${v.length} Zeichen erhalten (${v.slice(0, 4)}…${'•'.repeat(6)})`);
   return v;
 }
@@ -88,7 +88,7 @@ if (!st.tokensSet || await yes('Neue Zugangs-Tokens erzeugen? (alte Verbindungen
 }
 if (!st.mcpToken || secrets.JARVIS_TOKEN) secrets.MCP_TOKEN = token(30);   // 5.9.7: secret address for the Claude connection
 console.log('  Gemini-Key (gratis): aistudio.google.com/apikey → „API-Schlüssel erstellen“. Damit denkt der Server kostenlos (Wächter, Routinen, Telefon).');
-const gk = await askHidden('Gemini API-Key'); if (gk) { if (!/^AIza/.test(gk)) warn('Sieht nicht wie ein Gemini-Key aus (beginnt normalerweise mit AIza) – trotzdem gespeichert.'); secrets.GEMINI_API_KEY = gk; }
+const gk = await askHidden('Gemini API-Key'); if (gk) { if (!/^(AIza|AQ)/.test(gk)) warn('Sieht nicht wie ein Gemini-Key aus (beginnt normalerweise mit AIza oder AQ) – trotzdem gespeichert.'); secrets.GEMINI_API_KEY = gk; }
 console.log('  Optional: Anthropic-Key (kostet) – nur nötig, wenn du keinen Gemini-Key hast. Sonst einfach leer lassen.');
 const ak = await askHidden('Anthropic API-Key'); if (ak) { if (!/^sk-ant-/.test(ak)) warn('Sieht nicht wie ein Anthropic-Key aus (beginnt normalerweise mit sk-ant-) – trotzdem gespeichert.'); secrets.ANTHROPIC_API_KEY = ak; }
 console.log('  Echte Anrufe gehen über Twilio (twilio.com):\n' +
