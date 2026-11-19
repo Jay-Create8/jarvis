@@ -41,8 +41,12 @@ rl._writeToOutput = (s) => { if (!mute) rl.output.write(s); };          // hidde
 const nextLine = () => new Promise((res) => (queue.length ? res(queue.shift()) : closed ? res('') : waiters.push(res)));
 const ask = async (q, def = '') => { process.stdout.write(`  ${q}${def ? c.y(` [${def}]`) : ''}: `); return (await nextLine()).trim() || def; };
 async function askHidden(q) {
-  process.stdout.write(`  ${q} (Eingabe unsichtbar, leer = überspringen): `);
-  mute = true; const v = await nextLine(); mute = false; process.stdout.write('\n'); return v.trim();
+  process.stdout.write(`  ${q} (EINMAL einfügen mit Strg+V, dann Enter – man sieht nichts, leer = überspringen): `);
+  mute = true; let v = (await nextLine()).trim(); mute = false; process.stdout.write('\n');
+  // 5.9.7.2: pasted several times? (nothing is visible, so that happens) → keep the first copy
+  for (const pre of ['AIza', 'sk-ant-']) { const i = v.indexOf(pre, 1); if (v.startsWith(pre) && i > 0 && v.slice(0, i).repeat(Math.round(v.length / i)) === v) { v = v.slice(0, i); console.log(c.y('  ! Mehrfach eingefügt – ich nehme ihn einmal.')); } }
+  if (v) console.log(c.g('  ✓ ') + `${v.length} Zeichen erhalten (${v.slice(0, 4)}…${'•'.repeat(6)})`);
+  return v;
 }
 const yes = async (q, def = 'j') => /^j|^y/i.test(await ask(q + ' (j/n)', def));
 const token = (n = 24) => crypto.randomBytes(n).toString('base64url');

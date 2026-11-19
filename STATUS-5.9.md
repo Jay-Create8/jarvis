@@ -279,3 +279,8 @@ Dein Screenshot: Node.js wurde geladen und entpackt, aber das Umbenennen des Ord
 der Virenschutz frisch entpackte Dateien kurz festhält. Jetzt wird **nichts mehr umbenannt**: Die Starter (Einrichtung und PC-Agent)
 benutzen den Ordner `node-v24.22.3-win-x64` direkt und erkennen ihn auch, wenn er schon da ist (kein zweiter Download).
 ⚪ Auf echtem Windows ungetestet (kein Windows hier) – die Befehle sind dieselben wie vorher, nur ohne Umbenennen.
+
+## 5.9.7.2 – Einrichtung: unsichtbare Key-Eingabe
+Beim Einfügen des Keys sieht man nichts – du hast ihn deshalb mehrmals eingefügt. Jetzt: Hinweis „EINMAL einfügen, dann Enter“,
+danach Bestätigung „✓ 39 Zeichen erhalten (AIza…••••••)“, und ein mehrfach eingefügter Key wird automatisch auf einmal gekürzt.
+Test (nachgestelltes Cloudflare): 5× eingefügt → „Mehrfach eingefügt – ich nehme ihn einmal“, 39 Zeichen ✅
