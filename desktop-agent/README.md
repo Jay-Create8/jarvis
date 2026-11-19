@@ -87,3 +87,14 @@ derselben Bestätigungssperre.
   PowerShell sperren; dann meldet JARVIS das.
 - Test: `node tests/agent-computer-test.mjs <agent-ordner>` (15 Prüfungen; die Windows-Befehle im Testmodus, ausgeführt auf echtem
   Windows ungetestet).
+
+## Neu in 5.9.6: JARVIS in der Claude-App (mit Claude Pro – ohne API-Key)
+`mcp.mjs` ist ein **MCP-Server**: Er gibt der Claude-App (Windows/Mac) dieselben „Hände“ wie dem PC-Agent – Dateien (aufräumen,
+suchen, lesen, Duplikate, rückgängig) und Computer (Programme, Fenster, Lautstärke, Musik, Bildschirmfoto auf Wunsch, Systemzustand,
+Text schreiben, sperren, herunterfahren). Fertig verpackt als **`JARVIS-fuer-Claude.mcpb`** (Download in JARVIS → Einstellungen):
+Doppelklick → Claude zeigt „Installieren“. Die Claude-App bringt Node.js selbst mit – nichts zu installieren, keine Admin-Rechte.
+- Löschen, Duplikate entfernen, Papierkorb leeren, Programme/Skripte starten, Herunterfahren: **Bestätigungsfenster auf deinem
+  Bildschirm** (Standard „Nein“) – das kann nur ein Mensch anklicken, nicht die KI.
+- `JARVIS-Anweisungen.txt`: Text für ein Claude-Projekt „JARVIS“ (Persönlichkeit + wie die Werkzeuge benutzt werden).
+- Bauen: `node tools/build-claude-ext.mjs <pfad zu mcpb/dist/cli/cli.js>` · Test: `node tests/claude-ext-test.mjs <ordner mit
+  @modelcontextprotocol/sdk und @anthropic-ai/mcpb>` (prüft mit dem offiziellen MCP-Client, 9 Prüfungen).

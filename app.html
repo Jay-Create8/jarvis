@@ -381,6 +381,12 @@ body.immersive #chatToggle{display:grid}
   <div class="field"><label>Max. Telefonanrufe pro Tag</label><input id="cMaxCalls" type="number" min="0" max="20"></div>
   <div class="field"><label>Anruf-Budget pro Monat (USD, geschätzt)</label><input id="cBudget" type="number" min="0" max="200" step="1"></div>
   <div class="field"><label>Deine Kontaktregeln</label><textarea id="cfgRules" placeholder="z.B. Nach 22 Uhr nur bei Notfällen anrufen. Börsen-News nur per Push."></textarea></div>
+  <h3>JARVIS IN DER CLAUDE-APP (MIT CLAUDE PRO)</h3>
+  <p class="hint">Hast du Claude Pro? Dann kann <b>Claude selbst</b> dein JARVIS am Computer sein – <b>ohne API-Key, ohne Extrakosten</b>.
+  1. Claude-App für Windows/Mac installieren (<a href="https://claude.ai/download" target="_blank" style="color:var(--cyan2)">claude.ai/download</a>) und anmelden.
+  2. <a href="JARVIS-fuer-Claude.mcpb" download id="claudeExt">📥 JARVIS-Erweiterung herunterladen</a> (85 KB) → <b>Doppelklick</b> → in Claude „Installieren“.
+  3. Optional: <a href="JARVIS-Anweisungen.txt" target="_blank" id="claudeInstr" style="color:var(--cyan2)">JARVIS-Anweisungen</a> in ein Claude-Projekt „JARVIS“ kopieren.
+  Dann z.B.: „Räum meine Downloads auf“, „Öffne Spotify“, „Wie voll ist meine Festplatte?“. Löschen &amp; Herunterfahren bestätigst du immer selbst in einem Fenster.</p>
   <h3>PC-AGENT (DATEIEN &amp; WEBSITES AM LAPTOP)</h3>
   <p class="hint">Damit kann JARVIS am Laptop mit <b>deinen Dateien</b> arbeiten (Downloads, Desktop, Dokumente inkl. Unterordner: sortieren, suchen, lesen, öffnen) und echte Websites bedienen (Formulare ausfüllen, Reservierungen vorbereiten). <a href="JARVIS-PC-Agent.zip" download id="agentZip">📥 PC-Agent herunterladen</a> (ZIP, ca. 33 KB) → entpacken → Doppelklick auf <b>PC-Agent-starten.cmd</b> (Mac: .command). <b>Keine Admin-Rechte nötig</b> – nimmt Edge/Chrome, das schon auf dem PC ist. Dann das angezeigte Token hier eintragen – es bleibt gleich, nach einem Neustart verbindet sich JARVIS von selbst. Kaufen, Buchen, Bezahlen, Absenden, Löschen und Programme starten fragen immer zuerst dich.</p>
   <div class="field"><label>PC-Agent Token</label><input id="cfgAgent" type="password" autocomplete="off"></div>
@@ -474,7 +480,7 @@ body.immersive #chatToggle{display:grid}
 <script type="module">
 import * as G from './js/gemini.js';   // 5.8: free brain (Google Gemini)
 import * as L from './loader.js';       // 5.8: resumable part-wise loader
-const APP_VER = '5.9.5.2';   // written by tools/build-parts.mjs
+const APP_VER = '5.9.6';   // written by tools/build-parts.mjs
 // 5.9.5.2: no silent failures – every unexpected error is shown (max. one notice per 20 s) and kept for the diagnosis
 const errLog = [];
 function noteError(where, e, show = true){

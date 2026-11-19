@@ -234,3 +234,15 @@ wurde erst nach 60 Sekunden im Hintergrund geholt und galt erst beim **übernäc
 | Version sichtbar | Einstellungen → neben „DIAGNOSE“; der PC-Agent meldet seine Version | ✅ |
 
 **Tests:** 5.9 im Browser 23/23 + X1, H1, H2 · 5.8 (Gemini/Stimmen) 15/15 + B6 · Gemini-Übersetzer 9/9.
+
+## 5.9.6 – JARVIS in der Claude-App (mit deinem Claude Pro, ohne API-Key)
+Dein Wunsch: „Mach es nicht mit API-Keys, verbinde ihn einfach mit dir – ich hab schon Claude Pro.“
+Eine fremde Web-App kann dein Claude-Abo nicht benutzen (dafür gibt es keinen offiziellen Weg). **Aber umgekehrt geht es offiziell:**
+Die Claude-App bekommt JARVIS' Hände als Erweiterung („MCP Bundle“, ein Doppelklick). Dann ist Claude dein JARVIS am Computer.
+| Was | Wie | Test |
+|---|---|---|
+| Erweiterung `JARVIS-fuer-Claude.mcpb` | 27 Werkzeuge: Dateien (ordner, liste, suchen, sortieren, verschieben, umbenennen, lesen, öffnen, löschen, Duplikate, Papierkorb, rückgängig) + Computer (Programme, Fenster, Lautstärke, Musik, Bildschirmfoto, Systemzustand, schreiben, Zwischenablage, sperren, herunterfahren, JARVIS-App) | Manifest mit dem offiziellen Werkzeug geprüft und verpackt ✅ |
+| Menschliche Bestätigung | Löschen, Duplikate entfernen, Papierkorb leeren, Programme starten, Herunterfahren → Fenster auf deinem Bildschirm, Standard „Nein“ | ✅ (Fenster im Test nachgestellt: Nein → nichts passiert, Ja → ausgeführt) |
+| Offizieller MCP-Client | so gestartet wie die Claude-App es tut (entpackt, `node ${__dirname}/server/mcp.mjs`): Verbindung, Werkzeugliste, echtes Sortieren + Rückgängig, Suchen, Lesen, Grenzen, Systemzustand, Duplikate | **9/9** ✅ |
+| Claude-Projekt „JARVIS“ | `JARVIS-Anweisungen.txt` zum Einfügen (Persönlichkeit, Arbeitsweise) | – |
+**Ungetestet (⚪):** die Installation in deiner echten Claude-App und die Windows-Fenster selbst (kein Windows hier).

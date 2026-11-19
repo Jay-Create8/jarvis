@@ -17,7 +17,7 @@ import { spawnSync } from 'node:child_process';
 import { FILE_ACTIONS, needsConfirm } from './dateien.mjs';
 import { PC_ACTIONS, needsConfirmPc } from './computer.mjs';
 
-const AGENT_VER = '5.9.5.2';
+const AGENT_VER = '5.9.6';
 const PORT = +(process.env.JARVIS_AGENT_PORT || 47321);
 // 5.9.4: the token is kept in token.txt → after a restart JARVIS reconnects by itself (no new token to type in)
 const TOKEN_FILE = fileURLToPath(new URL('./token.txt', import.meta.url));

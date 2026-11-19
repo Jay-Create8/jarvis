@@ -1,4 +1,8 @@
-# J.A.R.V.I.S. 5.9.5.2 🤖
+# J.A.R.V.I.S. 5.9.6 🤖
+
+> **5.9.6: JARVIS in der Claude-App – mit deinem Claude Pro, ohne API-Key.** Einstellungen → „📥 JARVIS-Erweiterung herunterladen“
+> → Doppelklick → in Claude „Installieren“. Dann kann Claude deine Dateien aufräumen, Programme öffnen, Lautstärke/Musik steuern,
+> den Bildschirm ansehen und meldet volle Festplatten. Löschen & Herunterfahren bestätigst du immer selbst in einem Fenster.
 
 > **5.9.5.2:** JARVIS holt neue Versionen jetzt **sofort beim Start** und lädt sich selbst neu (auch wenn du direkt app.html öffnest).
 > Hängt Google, fragt er nach 30 s selbst nochmal; eine neue Frage bricht eine hängende ab. **Probleme? Schreib „diagnose“** – JARVIS
