@@ -1,4 +1,8 @@
-# J.A.R.V.I.S. 5.9.5 🤖
+# J.A.R.V.I.S. 5.9.5.2 🤖
+
+> **5.9.5.2:** JARVIS holt neue Versionen jetzt **sofort beim Start** und lädt sich selbst neu (auch wenn du direkt app.html öffnest).
+> Hängt Google, fragt er nach 30 s selbst nochmal; eine neue Frage bricht eine hängende ab. **Probleme? Schreib „diagnose“** – JARVIS
+> prüft alles echt und gibt dir einen Bericht zum Kopieren.
 
 > **5.9.5: JARVIS lebt in deinem Computer** (wie im Video von Moritz Maaker): Programme öffnen und schliessen, Lautstärke, Musik,
 > „Was ist auf meinem Bildschirm?“, Akku/Festplatte, in Word schreiben, sperren. Er meldet sich **von selbst**, wenn die Festplatte fast

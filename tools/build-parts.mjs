@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PART = 16384, VER = '5.9.5.1';
+const PART = 16384, VER = '5.9.5.2';
 const GROUPS = {
   req: ['index.html', 'app.html', 'loader.js', 'js/gemini.js', 'manifest.json', 'icon.svg'],          // needed to start
   def: ['js/hud3d.js', 'js/chunk-OF6KIFO7.js', 'js/windows.js', 'vendor/leaflet.css', 'icon-192.png'],  // loaded right after the start
@@ -14,6 +14,10 @@ const GROUPS = {
 };
 const TYPES = {html:'text/html; charset=utf-8', js:'text/javascript; charset=utf-8', mjs:'text/javascript; charset=utf-8', css:'text/css; charset=utf-8', json:'application/json', svg:'image/svg+xml', png:'image/png'};
 mkdirSync(join(ROOT, 'p'), {recursive:true});
+{ // 5.9.5.2: the app shows its own version (diagnosis, settings) – kept in sync with VER here
+  const f = join(ROOT, 'app.html'), a = readFileSync(f, 'utf8'), b = a.replace(/const APP_VER = '[^']*'/, `const APP_VER = '${VER}'`);
+  if (a !== b) writeFileSync(f, b);
+}
 const files = [], keep = new Set();
 for (const [g, list] of Object.entries(GROUPS)) for (const u of list){
   const raw = readFileSync(join(ROOT, u));

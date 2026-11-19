@@ -222,3 +222,15 @@ nachgestellt: leere Antwortblase, nichts passiert mehr.
 O1, A2, P1, P3, S2, D1, C1, V6 ✅ · Gemini-Übersetzer 9/9 · Live-Seite mit Gemini und Claude (nachgestellt) antwortet ✅.
 **Ehrlich:** Ob genau das bei dir passiert ist, weiss ich nicht sicher – es ist die einzige Ursache, die ich nachstellen konnte. Wenn er
 immer noch nicht antwortet: bitte Screenshot (mit der Meldung im Chat).
+
+## 5.9.5.2 – „Immer noch, und es fühlt sich unstabil an“
+**Wahrscheinliche Ursache:** Du öffnest direkt `app.html`. Dann lieferte das Handy/der Laptop die **gespeicherte alte Version**; die neue
+wurde erst nach 60 Sekunden im Hintergrund geholt und galt erst beim **übernächsten** Start. Der Fix von 5.9.5.1 kam so gar nicht bei dir an.
+| Was | Wie | Test |
+|---|---|---|
+| ⬆️ Update sofort | 2 s nach dem Start wird geprüft; ist eine neue Version da und du hast noch nichts gefragt, lädt JARVIS sich selbst neu („ist da – ich starte kurz neu“), sonst Knopf „JETZT NEU LADEN“; nie eine Neulade-Schleife; alle 30 Min. erneut | B6 ✅ (genau dein Weg: direkt app.html) |
+| 🩺 Diagnose | „diagnose“ im Chat oder Knopf in den Einstellungen: Version (läuft/neueste), Browser & Netz, KI-Key, Google erreichbar, **echte** einfache Frage, **echte** Frage mit allen Werkzeugen (zeigt, ob Google ein Werkzeug ablehnt), Claude, Kostendeckel, PC-Agent (mit Version), Server, Stimme, letzte Fehler – Bericht ohne Schlüssel zum Kopieren | X1 ✅ |
+| ⚠️ Keine stummen Fehler | jeder unerwartete Fehler wird im Chat gezeigt (höchstens alle 20 s) und für die Diagnose gemerkt | X1 ✅ |
+| Version sichtbar | Einstellungen → neben „DIAGNOSE“; der PC-Agent meldet seine Version | ✅ |
+
+**Tests:** 5.9 im Browser 23/23 + X1, H1, H2 · 5.8 (Gemini/Stimmen) 15/15 + B6 · Gemini-Übersetzer 9/9.

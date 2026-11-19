@@ -297,6 +297,7 @@ body.immersive #chatToggle{display:grid}
     <button class="btn" id="pasteKey" style="margin-right:6px">📋 KEY EINFÜGEN</button>
     <button class="btn primary" id="unlockAll">🚀 ALLES FREISCHALTEN</button>
     <button class="btn" id="installApp" style="margin-top:8px">📲 ALS APP INSTALLIEREN</button>
+    <button class="btn" id="diagBtn" style="margin-top:8px">🩺 DIAGNOSE</button> <span class="hint" id="verNow"></span>
     <a class="hint" href="JARVIS.apk" download style="display:inline-block;margin:8px 0 0 8px;color:var(--cyan2)">⬇️ oder APK laden</a>
     <div class="toggle" style="margin-top:8px"><div>💰 Kostendeckel pro Monat<small>Gemini (Denken, Stimme, Wächter, Routinen) ist gratis. Geld kosten nur Claude für grosse Aufgaben und echte Telefonate (Twilio) – zusammen nie mehr als der Deckel. Gerechnet 1 $ = 1 Fr. (also eher zu vorsichtig). <b id="sparNow"></b></small></div><input type="checkbox" data-k="sparmodus"></div>
     <div style="display:flex;gap:8px;margin-top:6px"><div class="field" style="flex:1;margin:0"><label>Deckel gesamt (Fr.)</label><input type="number" min="0" max="100" step="0.5" data-k="budgetChf"></div><div class="field" style="flex:1;margin:0"><label>davon Telefon (Fr.)</label><input type="number" min="0" max="100" step="0.5" data-k="budgetTelChf"></div></div>
@@ -473,6 +474,16 @@ body.immersive #chatToggle{display:grid}
 <script type="module">
 import * as G from './js/gemini.js';   // 5.8: free brain (Google Gemini)
 import * as L from './loader.js';       // 5.8: resumable part-wise loader
+const APP_VER = '5.9.5.2';   // written by tools/build-parts.mjs
+// 5.9.5.2: no silent failures – every unexpected error is shown (max. one notice per 20 s) and kept for the diagnosis
+const errLog = [];
+function noteError(where, e, show = true){
+  const m = String(e?.message || e || '').slice(0, 200); if (!m || /ResizeObserver|AbortError|abgebrochen|sandboxed|Service Worker/i.test(m)) return;
+  errLog.push({t:new Date().toLocaleTimeString('de-CH'), where, m}); if (errLog.length > 15) errLog.shift();
+  if (show && Date.now() - (noteError.last || 0) > 20000){ noteError.last = Date.now(); try{ sysLine('⚠ Interner Fehler (' + esc(where) + '): ' + esc(m.slice(0, 140)) + ' – Tipp: schreib „diagnose“.'); }catch{} }
+}
+window.addEventListener('error', (ev) => noteError('Seite', ev.error || ev.message));
+window.addEventListener('unhandledrejection', (ev) => noteError('Ablauf', ev.reason));
 let Anthropic = null, sdkReady = null;   // 5.7.2: loaded after start (slow connections); 5.8: only when Claude is used
 const loadSdk = () => (sdkReady ??= (async () => {
   try{ if (L.supported() && L.controller()) await L.ensure(['opt'], {only:['anthropic-sdk.mjs'], man:await L.getManifest({fresh:false})}); }catch{}
@@ -2456,6 +2467,7 @@ try{ const t = +localStorage.getItem('jarvis.testTimeout'); if (t > 0){ G.TIMEOU
 async function handleInput(text, imageDataUrl, opts = {}){
   text = (text||'').trim();
   if (!text && !imageDataUrl) return;
+  if (!opts.silent && /^\/?(diagnose|fehlersuche|selbstdiagnose)\s*[.!]?$/i.test(text)){ addMsg('user', esc(text)); runDiagnose().catch(e => noteError('Diagnose', e)); return; }
   if (busy){
     if (opts.silent){ eventQueue.push(text); return; }   // background events wait their turn
     // 5.9.5.1: the user asks again → stop the old request (it may hang) and answer the new question
@@ -2663,7 +2675,8 @@ async function runAgent(){
     else if (e?.status === 429) m = 'Rate-Limit erreicht – bitte kurz warten.';
     else if (e?.status === 529 || e?.status >= 500) m = 'Die KI-Server sind gerade überlastet. Versuch es gleich nochmal.';
     else if (!navigator.onLine) m = 'Keine Internetverbindung.';
-    body.insertAdjacentHTML('beforeend', `<p style="color:var(--red)">⚠ ${esc(m)}</p>`);
+    body.insertAdjacentHTML('beforeend', `<p style="color:var(--red)">⚠ ${esc(m)}</p><p class="hint">Hilfe: schreib „diagnose“ – dann prüfe ich alles und du kannst mir den Bericht schicken.</p>`);
+    noteError('Antwort', m, false);
     // keep history consistent: drop dangling user turn if the call failed before an assistant reply
     while (history.length && history[history.length-1].role === 'user') history.pop();
     beep(220,.25,'sawtooth',.06);
@@ -2748,7 +2761,7 @@ function renderLists(){
   { const fl = document.getElementById('fixList'); if (fl) mk(sttFix, fl, f => `„${esc(f.falsch)}“ → „${esc(f.richtig)}“`, f => { sttFix = sttFix.filter(x => x !== f); store.set('sttFix', sttFix); renderLists(); }); }
   { const dl = document.getElementById('decList'); if (dl) dl.innerHTML = decisions.length ? decisions.slice(-15).reverse().map(d => `<div class="memitem"><span><b>${d.wer === 'JARVIS' ? '🧠 JARVIS' : '👤 du'}</b> · ${esc(new Date(d.ts).toLocaleString('de-CH', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}))}<br><span class="hint">${esc(d.was || '')}${d.warum ? ' – ' + esc(d.warum) : ''}${d.ok === false ? ' (abgelehnt)' : ''}</span></span></div>`).join('') : '<p class="hint">Noch nichts.</p>'; }
 }
-function openSettings(){ fillSettings(); fillProfil(); $('#settings').classList.add('open'); }
+function openSettings(){ fillSettings(); fillProfil(); { const v = document.getElementById('verNow'); if (v) v.textContent = 'Version ' + APP_VER; } $('#settings').classList.add('open'); }
 function fillGemNow(){   // 5.8: what Gemini does today (free – counted on this device)
   const e = document.getElementById('gemNow'); if (!e) return;
   const u = gemUseToday(), n = Object.values(u.n).reduce((a, b) => a + b, 0);
@@ -3395,6 +3408,7 @@ $('#testSrv').onclick = async () => { readSettings(); try{ const r = await refre
 async function pcAutostartState(){ const e = document.getElementById('pcAutoState'); if (!e || !(agentWs && agentWs.readyState === 1)) return; try{ e.textContent = (await agentCall('pc:autostart_status', {}, 15e3)).autostart.toUpperCase(); }catch{ e.textContent = '?'; } }
 $('#pcAppWin').onclick = async () => { try{ await agentCall('pc:app_fenster', {}, 15e3); toast('🖥️ JARVIS-Fenster geöffnet.'); }catch(e){ toast('Geht nur mit verbundenem PC-Agent: ' + e.message.slice(0, 120)); } };
 $('#pcAutostart').onclick = async () => { try{ const an = $('#pcAutoState').textContent !== 'AN'; const r = await agentCall('pc:autostart', {an}, 15e3); $('#pcAutoState').textContent = r.autostart.toUpperCase(); toast(an ? '🚀 JARVIS startet ab jetzt mit dem Computer.' : 'Autostart aus.'); }catch(e){ toast('Geht nur mit verbundenem PC-Agent: ' + e.message.slice(0, 120)); } };
+$('#diagBtn').onclick = () => { closeSettings(); runDiagnose().catch(e => noteError('Diagnose', e)); };
 $('#kennenlernen').onclick = () => { readSettings(); closeSettings(); handleInput('Lern mich kennen: Stell mir nacheinander ein paar kurze, lockere Fragen (eine pro Nachricht) – Wohnadresse, Schule oder Arbeit, Geburtstag, wichtige Personen, Vorlieben, Allergien und wobei du mir am meisten helfen sollst. Speichere jede Antwort sofort im Steckbrief. Frag nur, was noch fehlt.'); };
 $('#connectAgent').onclick = () => { readSettings(); if (agentWs) agentWs.close(); agentWs = null; agentConnect(); };
 $('#testPush').onclick = async () => { readSettings(); const r = await contactUser({stufe:'push', titel:'J.A.R.V.I.S.', nachricht:'Test-Push: Verbindung steht.'}); toast('Push: ' + (r.push || '—')); };
@@ -3438,6 +3452,57 @@ function greet(){
 }
 
 /* =========================================================
+   5.9.5.2 SELF-DIAGNOSIS – „diagnose“ im Chat oder Knopf in den Einstellungen
+   Echte Mini-Anfragen (ohne Kosten bei Gemini; Claude ca. 0.0001 $), PC-Agent, Server, Version, letzte Fehler.
+   ========================================================= */
+async function runDiagnose(){
+  const card = document.createElement('div'); card.className = 'msg jarvis'; card.innerHTML = '<div class="who">J.A.R.V.I.S. · DIAGNOSE</div><div class="body"></div>';
+  logEl.append(card); scrollDown(); const body = card.querySelector('.body'); const lines = [];
+  const add = (ok, name, info = '') => { lines.push(`${ok === true ? '✅' : ok === null ? 'ℹ️' : ok === 'warn' ? '⚠️' : '❌'} ${name}${info ? ': ' + info : ''}`); body.innerHTML = lines.map(l => `<div>${esc(l)}</div>`).join('') + '<p class="hint">läuft …</p>'; scrollDown(); };
+  const timed = async (fn) => { const t0 = performance.now(); try{ const r = await fn(); return {ok:true, r, s:((performance.now() - t0) / 1000).toFixed(1)}; }catch(e){ return {ok:false, e, s:((performance.now() - t0) / 1000).toFixed(1)}; } };
+  // version
+  let latest = null; try{ latest = await L.getManifest({fresh:true}); }catch{}
+  const core = await L.findCore().catch(() => null);
+  add(latest && latest.ver !== APP_VER ? 'warn' : true, 'Version', `läuft ${APP_VER}${latest ? ' · neueste ' + latest.ver : ''}${core?.ver ? ' · gespeichert ' + core.ver : ''}${latest && latest.ver !== APP_VER ? ' → bitte neu laden (wird gerade geholt)' : ''}`);
+  if (latest && latest.ver !== APP_VER) checkUpdate();
+  const ua = navigator.userAgent, br = (ua.match(/Edg\/(\d+)/) ? 'Edge ' + ua.match(/Edg\/(\d+)/)[1] : ua.match(/Chrome\/(\d+)/) ? 'Chrome ' + ua.match(/Chrome\/(\d+)/)[1] : 'anderer Browser') + (/Android/.test(ua) ? ' · Android' : /Windows/.test(ua) ? ' · Windows' : /Mac/.test(ua) ? ' · Mac' : '');
+  const c = navigator.connection || {};
+  add(navigator.onLine ? true : false, 'Browser & Netz', `${br} · ${navigator.onLine ? 'online' : 'OFFLINE'}${c.effectiveType ? ' · ' + c.effectiveType : ''}${c.downlink ? ' · ~' + c.downlink + ' Mbit/s' : ''}`);
+  const prov = provider();
+  add(prov ? true : false, 'KI', prov ? `${prov === 'gemini' ? 'Gemini (gratis)' : 'Claude'}${gemKey() ? ' · Gemini-Key …' + gemKey().slice(-4) : ''}${hasClaude?.() ? ' · Claude-Key vorhanden' : ''} · Modus ${cfg.provider || 'auto'}` : 'kein Key eingetragen');
+  if (gemKey()){
+    const m = await timed(() => G.gemModels(gemKey()));
+    if (!m.ok) add(false, 'Google erreichbar', `${gemErrorText(m.e)} (${m.s} s)`);
+    else {
+      add(true, 'Google erreichbar', `${m.s} s · Modelle ${m.r.lite || '?'} / ${m.r.flash || '?'}`);
+      const model = gemModel();
+      const a = await timed(() => G.gemOnce({key:gemKey(), model, prompt:'Antworte nur mit dem Wort OK.', maxTokens:20, tries:1}));
+      add(a.ok && /ok/i.test(a.r.text || '') ? true : false, 'Einfache Frage an ' + model, a.ok ? `„${(a.r.text || '').trim().slice(0, 30)}“ in ${a.s} s` : `${gemErrorText(a.e)} (${a.s} s)`);
+      const t = await timed(() => G.gemStream({key:gemKey(), model, system:'Antworte nur mit dem Wort OK.', history:[{role:'user', content:'Test'}], tools:toolDefs(model), maxTokens:50, stream:true, tries:1}).finalMessage());
+      add(t.ok ? true : false, 'Frage mit allen ' + toolDefs(model).length + ' Werkzeugen (wie im Chat)', t.ok ? `Antwort in ${t.s} s` : `${gemErrorText(t.e)} (${t.s} s)`);
+      const u = gemUseToday(); if (u.aus?.length) add('warn', 'Gratis-Kontingent', 'heute aufgebraucht: ' + u.aus.join(', '));
+    }
+  }
+  if (hasClaude?.() && (prov === 'claude' || cfg.gemFallbackClaude)){
+    const r = await timed(async () => { await loadSdk(); const cl = getClient(); if (!cl) throw new Error('Claude-Key fehlt/gesperrt (PIN?)'); return cl.messages.create({model:'claude-haiku-5-5', max_tokens:5, messages:[{role:'user', content:'Sag OK'}]}, {timeout:30000}); });
+    add(r.ok ? true : false, 'Claude', r.ok ? `antwortet in ${r.s} s` : `${(r.e?.status ? 'HTTP ' + r.e.status + ' ' : '') + String(r.e?.message || r.e).slice(0, 120)} (${r.s} s)`);
+    if (cfg.sparmodus) add(budgetBlocked() ? 'warn' : true, 'Kostendeckel', `Claude ${monthCost().toFixed(2)} von ${claudeCap().toFixed(2)} Fr.${budgetBlocked() ? ' – erreicht' : ''}`);
+  }
+  if (cfg.agentTok){
+    if (agentWs && agentWs.readyState === 1){ const r = await timed(() => agentCall('status', {}, 15000)); add(r.ok ? true : 'warn', 'PC-Agent', r.ok ? `verbunden (Version ${r.r?.version || 'alt – bitte neu herunterladen'}) · ${r.s} s` : String(r.e?.message || r.e).slice(0, 120)); }
+    else add('warn', 'PC-Agent', 'nicht verbunden – läuft das schwarze Fenster am Laptop? (Token eingetragen)');
+  } else add(null, 'PC-Agent', 'nicht eingerichtet');
+  if (cfg.srv){ const r = await timed(() => srv('/api/status')); add(r.ok ? true : 'warn', 'JARVIS-Server', r.ok ? `antwortet (${r.s} s)${r.r?.twilio ? ' · Telefon eingerichtet' : ' · Telefon nicht eingerichtet'}` : String(r.e?.message || r.e).slice(0, 120)); }
+  add(null, 'Stimme', cfg.speak ? VOICE_NAMES[voiceOrder()[0] || 'device'] : 'aus');
+  add(busy ? 'warn' : true, 'Zustand', busy ? 'arbeitet noch an einer Anfrage' : 'bereit');
+  if (errLog.length) add('warn', 'Letzte Fehler', errLog.slice(-5).map(x => `${x.t} ${x.where}: ${x.m}`).join(' | ')); else add(true, 'Letzte Fehler', 'keine');
+  const text = 'JARVIS-Diagnose ' + new Date().toLocaleString('de-CH') + '\n' + lines.join('\n');
+  body.innerHTML = lines.map(l => `<div>${esc(l)}</div>`).join('') + '<p style="margin-top:8px"><button class="btn">📋 BERICHT KOPIEREN</button> <span class="hint">– enthält keine Schlüssel</span></p>';
+  body.querySelector('button').onclick = async () => { try{ await navigator.clipboard.writeText(text); toast('📋 Kopiert – einfach Claude schicken.'); }catch{ toast('Kopieren ging nicht – mach einen Screenshot.'); } };
+  scrollDown(); return text;
+}
+
+/* =========================================================
    BOOT SEQUENCE
    ========================================================= */
 // 5.8: updates come part by part in the background; unchanged files are copied, never downloaded again
@@ -3446,11 +3511,17 @@ async function checkUpdate(){
     if (!L.supported() || !L.controller() || !navigator.onLine) return;
     const cur = await L.findCore(); if (!cur) return;
     const man = await L.getManifest({fresh:true}); if (man.v === cur.v) return;
+    sysLine(`⬆️ Neue JARVIS-Version ${esc(man.ver || '')} wird geladen …`);
     const r = await L.ensure(['req', 'def'], {man});
     await L.markComplete(man);
-    toast(`⬆️ JARVIS ${man.ver} geladen${r.total ? ' (' + Math.round((r.total - r.reused) / 1024) + ' KB neu, Rest vom Handy übernommen)' : ''} – gilt beim nächsten Start.`);
+    // 5.9.5.2: apply at once – before, the new version only came with the start after next (when you opened app.html directly)
+    const fresh = !lastUserText && !busy && !ttsQueue && store.get('autoReload', '') !== man.v;   // never a reload loop
+    if (fresh){ store.set('autoReload', man.v); sysLine(`⬆️ JARVIS ${esc(man.ver || '')} ist da – ich starte kurz neu …`); setTimeout(() => location.reload(), 1500); return; }
+    const b = document.createElement('div'); b.className = 'sys'; b.innerHTML = `⬆️ JARVIS ${esc(man.ver || '')} ist geladen${r.total ? ' (' + Math.round((r.total - r.reused) / 1024) + ' KB neu)' : ''}. <button class="btn primary" style="padding:4px 10px">JETZT NEU LADEN</button>`;
+    b.querySelector('button').onclick = () => location.reload(); logEl.append(b); scrollDown();
   }catch(e){ console.warn('Update', e); }
 }
+setInterval(() => { if (!busy) checkUpdate(); }, 30 * 60e3);
 async function boot(){
   const lines = ['Initialisiere Kernsysteme', 'Lade neuronales Netz', 'Kalibriere Sprachmodul', 'Verbinde Sensorik', 'Synchronisiere Gedächtnis', 'Sicherheitsprotokolle aktiv'];
   const bl = $('#bootlog');
@@ -3460,7 +3531,7 @@ async function boot(){
     await new Promise(r => setTimeout(r, 170));
   }
   $('#boot').classList.add('hide');
-  setTimeout(() => loadDeferred().then(() => { if (provider() === 'claude' || cfg.gemFallbackClaude) loadSdk().catch(() => {}); setTimeout(checkUpdate, 60000); if (cfg.srv && Date.now() - (srvInfo().at || 0) > 6 * 3600e3) refreshSrvInfo(); }), 200);   // 5.8 / 5.9
+  setTimeout(() => loadDeferred().then(() => { if (provider() === 'claude' || cfg.gemFallbackClaude) loadSdk().catch(() => {}); setTimeout(checkUpdate, 2500); if (cfg.srv && Date.now() - (srvInfo().at || 0) > 6 * 3600e3) refreshSrvInfo(); }), 200);   // 5.8 / 5.9
   setTimeout(() => $('#boot').remove(), 900);
 }
 

@@ -17,6 +17,7 @@ import { spawnSync } from 'node:child_process';
 import { FILE_ACTIONS, needsConfirm } from './dateien.mjs';
 import { PC_ACTIONS, needsConfirmPc } from './computer.mjs';
 
+const AGENT_VER = '5.9.5.2';
 const PORT = +(process.env.JARVIS_AGENT_PORT || 47321);
 // 5.9.4: the token is kept in token.txt → after a restart JARVIS reconnects by itself (no new token to type in)
 const TOKEN_FILE = fileURLToPath(new URL('./token.txt', import.meta.url));
@@ -182,7 +183,7 @@ const handlers = {
   async scrollen({ richtung = 'unten' }) { await page.mouse.wheel(0, richtung === 'oben' ? -800 : 800); await page.waitForTimeout(500); return await read(); },
   async zurück() { await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {}); return await read(); },
   async screenshot() { return { bild: 'data:image/jpeg;base64,' + (await page.screenshot({ type: 'jpeg', quality: 60 })).toString('base64'), url: page.url() }; },
-  async status() { return { ok: true, url: page.url(), titel: await page.title() }; },
+  async status() { return { ok: true, version: AGENT_VER, url: page.url(), titel: await page.title() }; },
 };
 
 const wss = new WebSocketServer({ host: '127.0.0.1', port: PORT });
